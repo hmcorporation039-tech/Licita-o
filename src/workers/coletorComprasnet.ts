@@ -140,6 +140,10 @@ export function startColetorComprasnetWorker() {
     {
       connection: redisConnection,
       concurrency: 1,
+      // Ver comentário equivalente em coletorPNCP.ts — reduz o gasto de
+      // requisições do Redis (limite do plano gratuito do Upstash).
+      stalledInterval: 300_000, // 5min
+      lockDuration: 600_000, // 10min — cobre uma coleta paginada inteira
     }
   )
 

@@ -26,7 +26,7 @@ export interface Municipio {
   lng: number
 }
 
-function normalize(str: string): string {
+export function normalize(str: string): string {
   return str
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')

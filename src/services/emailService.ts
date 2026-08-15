@@ -44,3 +44,35 @@ export async function sendMatchEmail(params: MatchEmailParams) {
     `,
   })
 }
+
+export interface DocumentExpiryEmailParams {
+  to: string
+  documentName: string
+  diasRestantes: number
+  dataValidade: Date
+}
+
+export async function sendDocumentExpiryEmail(params: DocumentExpiryEmailParams) {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn('[emailService] RESEND_API_KEY não configurada — e-mail não enviado.')
+    return
+  }
+
+  const { to, documentName, diasRestantes, dataValidade } = params
+  const vencido = diasRestantes < 0
+  const dataFormatada = dataValidade.toLocaleDateString('pt-BR')
+
+  await getResendClient().emails.send({
+    from: EMAIL_FROM,
+    to,
+    subject: vencido
+      ? `Documento vencido: ${documentName}`
+      : `Documento vencendo em ${diasRestantes} dia(s): ${documentName}`,
+    html: `
+      <h2>${vencido ? 'Documento vencido' : 'Documento próximo do vencimento'}</h2>
+      <p><strong>Documento:</strong> ${documentName}</p>
+      <p><strong>Validade:</strong> ${dataFormatada} ${vencido ? '(já venceu)' : `(em ${diasRestantes} dia(s))`}</p>
+      <p>Renove esse documento pra não perder o prazo de nenhuma licitação em andamento.</p>
+    `,
+  })
+}

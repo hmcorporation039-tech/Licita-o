@@ -136,6 +136,12 @@ export function startColetorPNCPWorker() {
     {
       connection: redisConnection,
       concurrency: 1, // Uma coleta PNCP por vez (respeitar rate limit)
+      // Jobs de coleta são longos (várias páginas, 1 req/1.2s) e o worker fica a
+      // maior parte do tempo ocioso entre ciclos — o padrão do BullMQ (checar
+      // jobs travados a cada 30s) gasta requisições demais no Redis à toa; ver
+      // README sobre o limite do plano gratuito do Upstash.
+      stalledInterval: 300_000, // 5min
+      lockDuration: 600_000, // 10min — cobre uma coleta paginada inteira
     }
   )
 

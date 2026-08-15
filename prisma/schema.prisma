@@ -25,10 +25,12 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  monitoredItems MonitoredItem[]
-  tenderMatches  TenderMatch[]
-  notifications  Notification[]
-  checklists     TenderChecklist[]
+  monitoredItems     MonitoredItem[]
+  tenderMatches      TenderMatch[]
+  notifications      Notification[]
+  checklists         TenderChecklist[]
+  companyDocuments   CompanyDocument[]
+  participationPlans TenderParticipationPlan[]
 
   @@map("users")
 }
@@ -54,6 +56,10 @@ model MonitoredItem {
   valorMin    Decimal? @map("valor_min")    // Filtro de valor mínimo
   valorMax    Decimal? @map("valor_max")    // Filtro de valor máximo
   modalidades String[]                      // ['pregao', 'dispensa', 'concorrencia']
+  // Filtro por órgão — trecho do nome (ex: "PREFEITURA DE UBERLÂNDIA" para um
+  // órgão específico, ou "PREFEITURA"/"UNIVERSIDADE FEDERAL" para uma categoria
+  // inteira). Casamento literal por palavra, igual às keywords — ver matcherService.
+  orgaos      String[]                      // vazio = qualquer órgão
   active      Boolean  @default(true)
 
   // Filtro por raio de distância — alternativa/complemento ao filtro por UF,
@@ -85,6 +91,13 @@ model Tender {
   situacao        SituacaoEnum  @default(ABERTA)
   objeto          String        @db.Text
   objetoResumido  String?       @map("objeto_resumido") @db.VarChar(500)
+  // Versões sem acento/minúsculas de objeto/orgao/municipio, mantidas em sincronia
+  // na gravação — usadas pela busca (ver tenders.ts) pra "uberlandia" achar
+  // "Uberlândia" sem precisar da extensão unaccent do Postgres.
+  objetoNorm         String? @map("objeto_norm") @db.Text
+  objetoResumidoNorm String? @map("objeto_resumido_norm") @db.Text
+  orgaoNorm          String? @map("orgao_norm")
+  municipioNorm      String? @map("municipio_norm")
   valorEstimado   Decimal?      @map("valor_estimado")
   uf              String?       @db.Char(2)
   municipio       String?
@@ -103,10 +116,11 @@ model Tender {
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
-  items         TenderItem[]
-  tenderMatches TenderMatch[]
-  checklists    TenderChecklist[]
-  analysis      TenderAnalysis?
+  items              TenderItem[]
+  tenderMatches      TenderMatch[]
+  checklists         TenderChecklist[]
+  analysis           TenderAnalysis?
+  participationPlans TenderParticipationPlan[]
 
   @@index([fonte])
   @@index([uf])
@@ -142,6 +156,7 @@ enum SituacaoEnum {
   ENCERRADA
   SUSPENSA
   CANCELADA
+  ANULADA
   HOMOLOGADA
   REVOGADA
 }
@@ -214,6 +229,74 @@ model TenderChecklist {
 
   @@unique([userId, tenderId])
   @@map("tender_checklists")
+}
+
+// ============================================================
+// PLANO DE PARTICIPAÇÃO — linha do tempo dos prazos de uma licitação
+// (publicação, esclarecimento, impugnação, fim de propostas, disputa)
+// + status de decisão do usuário. Os marcos "automáticos" (com data vinda
+// da licitação, ou texto vindo da análise por IA) NÃO são armazenados
+// aqui — são recalculados a cada consulta a partir do Tender/TenderAnalysis
+// atuais (ver participationPlanTemplate.ts), pra não ficar desatualizado
+// se a análise por IA rodar depois do plano já ter sido criado. Só o
+// status, quais marcos automáticos já foram marcados como feitos, e os
+// marcos customizados adicionados pelo usuário ficam persistidos aqui.
+// ============================================================
+
+model TenderParticipationPlan {
+  id         String                  @id @default(uuid())
+  userId     String                  @map("user_id")
+  tenderId   String                  @map("tender_id")
+  status     ParticipationStatusEnum @default(AVALIANDO)
+  state      Json // { doneIds: string[], custom: PlanMilestone[] }
+  createdAt  DateTime                @default(now()) @map("created_at")
+  updatedAt  DateTime                @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tender Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenderId])
+  @@map("tender_participation_plans")
+}
+
+enum ParticipationStatusEnum {
+  AVALIANDO
+  VOU_PARTICIPAR
+  NAO_VOU_PARTICIPAR
+  PARTICIPEI
+}
+
+// ============================================================
+// COFRE DE DOCUMENTOS DA EMPRESA — documentos que a empresa já possui,
+// cadastrados uma vez (não por licitação). Cruza automaticamente com o
+// checklist de cada licitação pelo campo `tipo`, que usa os mesmos códigos
+// de src/lib/checklistTemplate.ts (ex: 'cnd-federal', 'crf-fgts').
+// `tipo: null` = documento avulso, fora da lista padrão do checklist.
+// Pode haver mais de um documento do mesmo tipo (ex: vários atestados de
+// capacidade técnica de obras diferentes) — o cruzamento considera
+// "atende" se existir ao menos um, não vencido, daquele tipo.
+// ============================================================
+
+model CompanyDocument {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  tipo         String? // código do checklistTemplate, ou null pra avulso
+  nome         String // nome descritivo (ex: "Certidão Negativa Federal")
+  dataEmissao  DateTime? @map("data_emissao")
+  dataValidade DateTime? @map("data_validade") // null = não vence (ex: contrato social)
+  observacao   String?   @db.Text
+  // Último alerta de vencimento enviado — evita reenviar todo dia; ver
+  // documentAlertService.ts. Some naturalmente da consulta quando o
+  // documento é renovado com uma validade mais distante.
+  lastAlertedAt DateTime? @map("last_alerted_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tipo])
+  @@map("company_documents")
 }
 
 // ============================================================

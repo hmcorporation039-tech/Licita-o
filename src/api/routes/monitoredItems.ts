@@ -39,6 +39,8 @@ const createSchema = z.object({
   valorMin: z.number().nonnegative().nullable().optional(),
   valorMax: z.number().nonnegative().nullable().optional(),
   modalidades: z.array(z.enum(MODALIDADE_VALUES)).default([]),
+  // Filtro por órgão — nome específico ou trecho (categoria, ex: "PREFEITURA")
+  orgaos: z.array(z.string().min(1)).default([]),
   // Filtro por raio de distância — alternativa ao filtro por UF
   raioKm: z.number().int().positive().nullable().optional(),
   origemMunicipio: z.string().min(1).nullable().optional(),
@@ -168,6 +170,7 @@ monitoredItemsRouter.post(
         catserCodes: item.catserCodes,
         ufs: item.ufs,
         modalidades: item.modalidades,
+        orgaos: item.orgaos,
         valorMin: item.valorMin ? Number(item.valorMin) : null,
         valorMax: item.valorMax ? Number(item.valorMax) : null,
         raioKm: item.raioKm,

@@ -9,12 +9,29 @@ import { asyncHandler, ApiError } from '../asyncHandler'
 import { buildChecklistTemplate, ChecklistItem } from '../../lib/checklistTemplate'
 import { runEditalAnalysis } from '../../services/editalAnalysisService'
 import { fetchPNCPItens } from '../../services/pncpItemsService'
+import { normalize } from '../../lib/geoService'
+import { buildAutoMilestones, PlanMilestone } from '../../lib/participationPlanTemplate'
 
 export const tendersRouter = Router()
+
+const SITUACAO_VALUES = ['ABERTA', 'ENCERRADA', 'SUSPENSA', 'CANCELADA', 'ANULADA', 'HOMOLOGADA', 'REVOGADA'] as const
 
 const querySchema = z.object({
   uf: z.string().length(2).optional(),
   modalidade: z.string().optional(),
+  situacao: z.enum(SITUACAO_VALUES).optional(),
+  orgao: z.string().trim().min(1).optional(),
+  municipio: z.string().trim().min(1).optional(),
+  // "Nº edital" no estilo BLL — busca pelo número de controle do PNCP/ComprasNet
+  numero: z.string().trim().min(1).optional(),
+  publicacaoInicio: z.coerce.date().optional(),
+  publicacaoFim: z.coerce.date().optional(),
+  q: z.string().trim().min(1).optional(),
+  // Quando informado, restringe o feed às licitações que deram match com
+  // algum item monitorado deste usuário (em vez do feed público completo) —
+  // o cruzamento em si é feito pelo matcher (word_similarity no objeto/itens
+  // + código CATMAT/CATSER), aqui só filtramos e classificamos o resultado.
+  userId: z.string().uuid().optional(),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(20),
 })
@@ -22,23 +39,82 @@ const querySchema = z.object({
 tendersRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const { uf, modalidade, page, pageSize } = querySchema.parse(req.query)
+    const {
+      uf,
+      modalidade,
+      situacao,
+      orgao,
+      municipio,
+      numero,
+      publicacaoInicio,
+      publicacaoFim,
+      q,
+      userId,
+      page,
+      pageSize,
+    } = querySchema.parse(req.query)
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const where: Record<string, any> = {}
     if (uf) where.uf = uf
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (modalidade) where.modalidade = modalidade as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (situacao) where.situacao = situacao as any
+    // Busca contra as colunas *_norm (minúsculas, sem acento) em vez das colunas
+    // originais — assim "uberlandia" encontra "Uberlândia" sem depender da
+    // extensão unaccent do Postgres (ver comentário no schema.prisma).
+    if (orgao) where.orgaoNorm = { contains: normalize(orgao) }
+    if (municipio) where.municipioNorm = { contains: normalize(municipio) }
+    if (numero) where.numeroControle = { contains: numero, mode: 'insensitive' }
+    if (publicacaoInicio || publicacaoFim) {
+      where.publicadoAt = {
+        ...(publicacaoInicio ? { gte: publicacaoInicio } : {}),
+        ...(publicacaoFim ? { lte: publicacaoFim } : {}),
+      }
+    }
+    if (q) {
+      const qNorm = normalize(q)
+      where.OR = [{ objetoNorm: { contains: qNorm } }, { objetoResumidoNorm: { contains: qNorm } }]
+    }
+    if (userId) where.tenderMatches = { some: { userId } }
 
-    const [items, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       prisma.tender.findMany({
         where,
         orderBy: { publicadoAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
+        include: userId
+          ? { tenderMatches: { where: { userId }, include: { monitoredItem: { select: { id: true, name: true } } } } }
+          : undefined,
       }),
       prisma.tender.count({ where }),
     ])
+
+    // Classifica a relevância do match (maior score entre os itens que bateram
+    // com esta licitação) pra dar ao usuário um sinal rápido de prioridade.
+    const items = rows.map((t) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const matches = (t as any).tenderMatches as
+        | { score: number; matchedKeywords: string[]; monitoredItem: { id: string; name: string } }[]
+        | undefined
+      if (!matches) return t
+
+      const bestScore = matches.reduce((max, m) => Math.max(max, m.score), 0)
+      const classificacao = bestScore >= 0.99 ? 'exata' : bestScore >= 0.7 ? 'alta' : 'media'
+
+      return {
+        ...t,
+        tenderMatches: undefined,
+        match: {
+          score: bestScore,
+          classificacao,
+          itensRelacionados: matches.map((m) => m.monitoredItem.name),
+          palavrasChave: Array.from(new Set(matches.flatMap((m) => m.matchedKeywords))),
+        },
+      }
+    })
 
     res.json({ items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) })
   })
@@ -185,5 +261,94 @@ tendersRouter.post(
 
     const result = await prisma.tenderAnalysis.findUnique({ where: { tenderId: req.params.id } })
     res.json(result)
+  })
+)
+
+const PARTICIPATION_STATUS_VALUES = ['AVALIANDO', 'VOU_PARTICIPAR', 'NAO_VOU_PARTICIPAR', 'PARTICIPEI'] as const
+
+interface PlanState {
+  doneIds: string[]
+  custom: PlanMilestone[]
+}
+
+async function buildPlanResponse(tenderId: string, status: string, state: PlanState) {
+  const tender = await prisma.tender.findUnique({
+    where: { id: tenderId },
+    select: { publicadoAt: true, encerramentoAt: true, aberturaAt: true },
+  })
+  const analysis = await prisma.tenderAnalysis.findUnique({ where: { tenderId } })
+  const analysisPrazos =
+    analysis?.status === 'DONE' && analysis.resultado
+      ? (analysis.resultado as unknown as { prazoImpugnacao: string; prazoEsclarecimento: string })
+      : null
+
+  const auto = buildAutoMilestones(tender ?? { publicadoAt: null, encerramentoAt: null, aberturaAt: null }, analysisPrazos).map(
+    (m) => ({ ...m, done: m.done || state.doneIds.includes(m.id) })
+  )
+
+  return { status, milestones: [...auto, ...state.custom] }
+}
+
+// Retorna o plano de participação, criando um vazio na primeira vez. Os
+// marcos automáticos (datas da licitação + prazos da análise por IA) são
+// recalculados a cada consulta — ver participationPlanTemplate.ts.
+tendersRouter.get(
+  '/:id/plano',
+  asyncHandler(async (req, res) => {
+    const userId = req.query.userId
+    if (typeof userId !== 'string') throw new ApiError(400, 'Parâmetro userId é obrigatório')
+
+    const tender = await prisma.tender.findUnique({ where: { id: req.params.id }, select: { id: true } })
+    if (!tender) throw new ApiError(404, 'Licitação não encontrada')
+
+    const existing = await prisma.tenderParticipationPlan.findUnique({
+      where: { userId_tenderId: { userId, tenderId: req.params.id } },
+    })
+
+    const state = (existing?.state as unknown as PlanState) ?? { doneIds: [], custom: [] }
+    const status = existing?.status ?? 'AVALIANDO'
+
+    res.json(await buildPlanResponse(req.params.id, status, state))
+  })
+)
+
+const putPlanoSchema = z.object({
+  userId: z.string().uuid(),
+  status: z.enum(PARTICIPATION_STATUS_VALUES),
+  milestones: z.array(
+    z.object({
+      id: z.string().min(1),
+      label: z.string().min(1),
+      date: z.string().nullable(),
+      detalhe: z.string().nullable(),
+      done: z.boolean(),
+      custom: z.boolean(),
+    })
+  ),
+})
+
+// Salva o status de decisão + quais marcos foram marcados como feitos +
+// marcos customizados — o frontend envia a lista completa (automáticos +
+// customizados) a cada alteração, igual ao checklist.
+tendersRouter.put(
+  '/:id/plano',
+  asyncHandler(async (req, res) => {
+    const { userId, status, milestones } = putPlanoSchema.parse(req.body)
+
+    const tender = await prisma.tender.findUnique({ where: { id: req.params.id }, select: { id: true } })
+    if (!tender) throw new ApiError(404, 'Licitação não encontrada')
+
+    const state: PlanState = {
+      doneIds: milestones.filter((m) => !m.custom && m.done).map((m) => m.id),
+      custom: milestones.filter((m) => m.custom),
+    }
+
+    await prisma.tenderParticipationPlan.upsert({
+      where: { userId_tenderId: { userId, tenderId: req.params.id } },
+      update: { status, state: state as unknown as object },
+      create: { userId, tenderId: req.params.id, status, state: state as unknown as object },
+    })
+
+    res.json(await buildPlanResponse(req.params.id, status, state))
   })
 )

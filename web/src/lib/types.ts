@@ -19,6 +19,7 @@ export interface MonitoredItem {
   valorMin: string | null
   valorMax: string | null
   modalidades: string[]
+  orgaos: string[]
   active: boolean
   raioKm: number | null
   origemMunicipio: string | null
@@ -38,6 +39,13 @@ export interface TenderItem {
   valorTotal: string | null
 }
 
+export interface TenderMatchInfo {
+  score: number
+  classificacao: 'exata' | 'alta' | 'media'
+  itensRelacionados: string[]
+  palavrasChave: string[]
+}
+
 export interface Tender {
   id: string
   fonte: 'PNCP' | 'COMPRASNET'
@@ -49,11 +57,13 @@ export interface Tender {
   uf: string | null
   municipio: string | null
   orgao: string | null
+  numeroControle: string | null
   aberturaAt: string | null
   publicadoAt: string | null
   linkEdital: string | null
   createdAt: string
   items?: TenderItem[]
+  match?: TenderMatchInfo
 }
 
 export interface TenderMatch {
@@ -67,6 +77,17 @@ export interface TenderMatch {
   createdAt: string
   tender: Tender
   monitoredItem: MonitoredItem
+}
+
+export interface CompanyDocument {
+  id: string
+  userId: string
+  tipo: string | null
+  nome: string
+  dataEmissao: string | null
+  dataValidade: string | null
+  observacao: string | null
+  createdAt: string
 }
 
 export interface Paginated<T> {
@@ -93,6 +114,22 @@ export interface TenderChecklist {
   items: ChecklistItem[]
 }
 
+export type ParticipationStatus = 'AVALIANDO' | 'VOU_PARTICIPAR' | 'NAO_VOU_PARTICIPAR' | 'PARTICIPEI'
+
+export interface PlanMilestone {
+  id: string
+  label: string
+  date: string | null
+  detalhe: string | null
+  done: boolean
+  custom: boolean
+}
+
+export interface ParticipationPlan {
+  status: ParticipationStatus
+  milestones: PlanMilestone[]
+}
+
 export type AnalysisStatus = 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED' | 'NO_DOCUMENTS'
 
 export interface AnalysisRisco {
@@ -106,6 +143,8 @@ export interface AnalysisResultado {
   valorEstimado: string
   prazoEntrega: string
   criterioJulgamento: string
+  prazoImpugnacao: string
+  prazoEsclarecimento: string
   exigenciasTecnicas: string[]
   documentosExigidos: string[]
   riscos: AnalysisRisco[]

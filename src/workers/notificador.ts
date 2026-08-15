@@ -55,6 +55,9 @@ export function startNotificadorWorker() {
     {
       connection: redisConnection,
       concurrency: 3,
+      // Ver comentário equivalente em coletorPNCP.ts — reduz o gasto de
+      // requisições do Redis (limite do plano gratuito do Upstash).
+      stalledInterval: 300_000, // 5min
     }
   )
 

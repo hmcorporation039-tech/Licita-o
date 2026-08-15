@@ -36,6 +36,7 @@ export default function ItemsPage() {
   const [catmatCodes, setCatmatCodes] = useState('')
   const [catserCodes, setCatserCodes] = useState('')
   const [modalidades, setModalidades] = useState<string[]>([])
+  const [orgaos, setOrgaos] = useState('')
   const [ufs, setUfs] = useState('')
   const [valorMax, setValorMax] = useState('')
   const [raioKm, setRaioKm] = useState('')
@@ -50,6 +51,7 @@ export default function ItemsPage() {
   const [editCatmatCodes, setEditCatmatCodes] = useState('')
   const [editCatserCodes, setEditCatserCodes] = useState('')
   const [editModalidades, setEditModalidades] = useState<string[]>([])
+  const [editOrgaos, setEditOrgaos] = useState('')
   const [editUfs, setEditUfs] = useState('')
   const [editValorMax, setEditValorMax] = useState('')
   const [editRaioKm, setEditRaioKm] = useState('')
@@ -87,6 +89,7 @@ export default function ItemsPage() {
         catmatCodes: catmatCodes.split(',').map((c) => c.trim()).filter(Boolean),
         catserCodes: catserCodes.split(',').map((c) => c.trim()).filter(Boolean),
         modalidades,
+        orgaos: orgaos.split(',').map((o) => o.trim()).filter(Boolean),
         ufs: ufs.split(',').map((u) => u.trim().toUpperCase()).filter(Boolean),
         valorMax: valorMax ? Number(valorMax) : undefined,
         raioKm: raioKm ? Number(raioKm) : undefined,
@@ -98,6 +101,7 @@ export default function ItemsPage() {
       setCatmatCodes('')
       setCatserCodes('')
       setModalidades([])
+      setOrgaos('')
       setUfs('')
       setValorMax('')
       setRaioKm('')
@@ -119,6 +123,7 @@ export default function ItemsPage() {
     setEditCatmatCodes(item.catmatCodes.join(', '))
     setEditCatserCodes(item.catserCodes.join(', '))
     setEditModalidades(item.modalidades)
+    setEditOrgaos(item.orgaos.join(', '))
     setEditUfs(item.ufs.join(', '))
     setEditValorMax(item.valorMax ?? '')
     setEditRaioKm(item.raioKm ? String(item.raioKm) : '')
@@ -143,6 +148,7 @@ export default function ItemsPage() {
         catmatCodes: editCatmatCodes.split(',').map((c) => c.trim()).filter(Boolean),
         catserCodes: editCatserCodes.split(',').map((c) => c.trim()).filter(Boolean),
         modalidades: editModalidades,
+        orgaos: editOrgaos.split(',').map((o) => o.trim()).filter(Boolean),
         ufs: editUfs.split(',').map((u) => u.trim().toUpperCase()).filter(Boolean),
         valorMax: editValorMax ? Number(editValorMax) : null,
         raioKm: editRaioKm ? Number(editRaioKm) : null,
@@ -237,6 +243,13 @@ export default function ItemsPage() {
             className="rounded border border-slate-300 px-3 py-2 text-sm"
           />
 
+          <input
+            placeholder="Órgãos, separados por vírgula (ex: PREFEITURA DE UBERLÂNDIA, UNIVERSIDADE FEDERAL)"
+            value={orgaos}
+            onChange={(e) => setOrgaos(e.target.value)}
+            className="rounded border border-slate-300 px-3 py-2 text-sm sm:col-span-2"
+          />
+
           <div className="sm:col-span-2 rounded border border-slate-200 p-3">
             <p className="mb-2 text-xs font-medium text-slate-500">
               Modalidades (opcional — vazio = todas)
@@ -325,6 +338,12 @@ export default function ItemsPage() {
                       className="rounded border border-slate-300 px-3 py-2 text-sm"
                     />
                     <input
+                      placeholder="Órgãos, separados por vírgula (opcional)"
+                      value={editOrgaos}
+                      onChange={(e) => setEditOrgaos(e.target.value)}
+                      className="rounded border border-slate-300 px-3 py-2 text-sm sm:col-span-2"
+                    />
+                    <input
                       type="number"
                       placeholder="Valor máximo (opcional)"
                       value={editValorMax}
@@ -410,6 +429,9 @@ export default function ItemsPage() {
                         </p>
                       ) : (
                         item.ufs.length > 0 && <p className="text-sm text-slate-500">UFs: {item.ufs.join(', ')}</p>
+                      )}
+                      {item.orgaos.length > 0 && (
+                        <p className="text-sm text-slate-500">Órgãos: {item.orgaos.join(', ')}</p>
                       )}
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1 text-sm">

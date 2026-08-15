@@ -4,6 +4,7 @@
 
 import { Prisma, PrismaClient } from '@prisma/client'
 import { NormalizedTender, NormalizedTenderItem } from '../types'
+import { normalize } from '../lib/geoService'
 
 const prisma = new PrismaClient()
 
@@ -34,6 +35,10 @@ export async function saveTender(tender: NormalizedTender): Promise<SaveResult> 
         modalidade: tender.modalidade,
         objeto: tender.objeto,
         objetoResumido: tender.objetoResumido,
+        objetoNorm: normalize(tender.objeto),
+        objetoResumidoNorm: tender.objetoResumido ? normalize(tender.objetoResumido) : null,
+        orgaoNorm: tender.orgao ? normalize(tender.orgao) : null,
+        municipioNorm: tender.municipio ? normalize(tender.municipio) : null,
         valorEstimado: tender.valorEstimado,
         uf: tender.uf,
         municipio: tender.municipio,

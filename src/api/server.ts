@@ -11,6 +11,7 @@ import { usersRouter } from './routes/users'
 import { monitoredItemsRouter } from './routes/monitoredItems'
 import { tendersRouter } from './routes/tenders'
 import { matchesRouter } from './routes/matches'
+import { companyDocumentsRouter } from './routes/companyDocuments'
 import { ApiError } from './asyncHandler'
 
 const app = express()
@@ -23,6 +24,7 @@ app.use('/api/users', usersRouter)
 app.use('/api/monitored-items', monitoredItemsRouter)
 app.use('/api/tenders', tendersRouter)
 app.use('/api/matches', matchesRouter)
+app.use('/api/company-documents', companyDocumentsRouter)
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof ZodError) {
