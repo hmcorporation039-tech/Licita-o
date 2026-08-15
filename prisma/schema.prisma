@@ -1,0 +1,302 @@
+// ============================================================
+// schema.prisma — Plataforma de Monitoramento de Licitações
+// Stack: PostgreSQL (Supabase) + Prisma ORM
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// USUÁRIOS E AUTENTICAÇÃO
+// ============================================================
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  plan      Plan     @default(FREE)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  monitoredItems MonitoredItem[]
+  tenderMatches  TenderMatch[]
+  notifications  Notification[]
+  checklists     TenderChecklist[]
+
+  @@map("users")
+}
+
+enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+// ============================================================
+// ITENS MONITORADOS (cadastrados pelo usuário)
+// ============================================================
+
+model MonitoredItem {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  name        String                        // Nome amigável do item
+  keywords    String[]                      // ['notebook', 'computador portátil']
+  catmatCodes String[] @map("catmat_codes") // Códigos CATMAT (opcional)
+  catserCodes String[] @map("catser_codes") // Códigos CATSER (opcional)
+  ufs         String[]                      // ['DF', 'GO'] — vazio = nacional
+  valorMin    Decimal? @map("valor_min")    // Filtro de valor mínimo
+  valorMax    Decimal? @map("valor_max")    // Filtro de valor máximo
+  modalidades String[]                      // ['pregao', 'dispensa', 'concorrencia']
+  active      Boolean  @default(true)
+
+  // Filtro por raio de distância — alternativa/complemento ao filtro por UF,
+  // útil pra quem presta serviço presencial e só atende dentro de um raio.
+  raioKm          Int?     @map("raio_km")
+  origemMunicipio String?  @map("origem_municipio")
+  origemUf        String?  @map("origem_uf") @db.Char(2)
+  origemLat       Float?   @map("origem_lat")
+  origemLng       Float?   @map("origem_lng")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user          User          @relation(fields: [userId], references: [id])
+  tenderMatches TenderMatch[]
+
+  @@map("monitored_items")
+}
+
+// ============================================================
+// LICITAÇÕES COLETADAS (normalizado entre PNCP e ComprasNet)
+// ============================================================
+
+model Tender {
+  id              String        @id @default(uuid())
+  fonte           FonteEnum                         // 'PNCP' | 'COMPRASNET'
+  fonteId         String        @unique @map("fonte_id") // ID único da fonte
+  modalidade      ModalidadeEnum
+  situacao        SituacaoEnum  @default(ABERTA)
+  objeto          String        @db.Text
+  objetoResumido  String?       @map("objeto_resumido") @db.VarChar(500)
+  valorEstimado   Decimal?      @map("valor_estimado")
+  uf              String?       @db.Char(2)
+  municipio       String?
+  municipioIbge   String?       @map("municipio_ibge")
+  municipioLat    Float?        @map("municipio_lat")
+  municipioLng    Float?        @map("municipio_lng")
+  orgao           String?
+  orgaoCnpj       String?       @map("orgao_cnpj") @db.VarChar(14)
+  unidade         String?
+  aberturaAt      DateTime?     @map("abertura_at")
+  encerramentoAt  DateTime?     @map("encerramento_at")
+  publicadoAt     DateTime?     @map("publicado_at")
+  linkEdital      String?       @map("link_edital")
+  numeroControle  String?       @map("numero_controle")
+  rawJson         Json          @map("raw_json")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  items         TenderItem[]
+  tenderMatches TenderMatch[]
+  checklists    TenderChecklist[]
+  analysis      TenderAnalysis?
+
+  @@index([fonte])
+  @@index([uf])
+  @@index([modalidade])
+  @@index([situacao])
+  @@index([aberturaAt])
+  @@index([publicadoAt])
+  @@map("tenders")
+}
+
+enum FonteEnum {
+  PNCP
+  COMPRASNET
+}
+
+enum ModalidadeEnum {
+  PREGAO_ELETRONICO
+  PREGAO_PRESENCIAL
+  CONCORRENCIA
+  DISPENSA_COM_DISPUTA
+  DISPENSA_SEM_DISPUTA
+  INEXIGIBILIDADE
+  CONVITE
+  TOMADA_DE_PRECOS
+  CONCURSO
+  CREDENCIAMENTO
+  DIALOGO_COMPETITIVO
+  OUTROS
+}
+
+enum SituacaoEnum {
+  ABERTA
+  ENCERRADA
+  SUSPENSA
+  CANCELADA
+  HOMOLOGADA
+  REVOGADA
+}
+
+// ============================================================
+// ITENS DE CADA LICITAÇÃO
+// ============================================================
+
+model TenderItem {
+  id              String   @id @default(uuid())
+  tenderId        String   @map("tender_id")
+  numeroItem      Int?     @map("numero_item")
+  descricao       String   @db.Text
+  catmatCode      String?  @map("catmat_code")
+  catserCode      String?  @map("catser_code")
+  unidadeMedida   String?  @map("unidade_medida")
+  quantidade      Decimal?
+  valorUnitario   Decimal? @map("valor_unitario")
+  valorTotal      Decimal? @map("valor_total")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  tender Tender @relation(fields: [tenderId], references: [id])
+
+  @@index([tenderId])
+  @@index([catmatCode])
+  @@map("tender_items")
+}
+
+// ============================================================
+// MATCHES (cruzamento item monitorado x licitação)
+// ============================================================
+
+model TenderMatch {
+  id              String   @id @default(uuid())
+  tenderId        String   @map("tender_id")
+  monitoredItemId String   @map("monitored_item_id")
+  userId          String   @map("user_id")
+  score           Float                              // Relevância 0–1
+  matchedKeywords String[] @map("matched_keywords")  // Palavras que deram match
+  read            Boolean  @default(false)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  tender        Tender        @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  monitoredItem MonitoredItem @relation(fields: [monitoredItemId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenderId, monitoredItemId])
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt])
+  @@map("tender_matches")
+}
+
+// ============================================================
+// CHECKLIST DE DOCUMENTAÇÃO (habilitação) por licitação
+// Baseado no guia "Checklist de Documentação para Licitações
+// Públicas — Prestação de Serviços" (Lei 14.133/2021)
+// ============================================================
+
+model TenderChecklist {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tenderId  String   @map("tender_id")
+  items     Json     // [{ id, section, label, hint?, checked, custom }]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tender Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenderId])
+  @@map("tender_checklists")
+}
+
+// ============================================================
+// ANÁLISE DO EDITAL POR IA (Claude) — uma por licitação, compartilhada
+// entre todos os usuários (o edital é o mesmo documento para todos)
+// ============================================================
+
+model TenderAnalysis {
+  id            String         @id @default(uuid())
+  tenderId      String         @unique @map("tender_id")
+  status        AnalysisStatus @default(PENDING)
+  documentoNome String?        @map("documento_nome")
+  resultado     Json?          // { resumo, valorEstimado, prazoEntrega, criterioJulgamento, exigenciasTecnicas, documentosExigidos, riscos }
+  errorMsg      String?        @map("error_msg") @db.Text
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  tender Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  @@map("tender_analyses")
+}
+
+enum AnalysisStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+  NO_DOCUMENTS
+}
+
+// ============================================================
+// NOTIFICAÇÕES
+// ============================================================
+
+model Notification {
+  id        String             @id @default(uuid())
+  userId    String             @map("user_id")
+  type      NotificationTypeEnum
+  title     String
+  body      String             @db.Text
+  metadata  Json?
+  sentAt    DateTime?          @map("sent_at")
+  readAt    DateTime?          @map("read_at")
+  createdAt DateTime           @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+enum NotificationTypeEnum {
+  EMAIL
+  PUSH
+  IN_APP
+}
+
+// ============================================================
+// LOG DE EXECUÇÃO DOS WORKERS
+// ============================================================
+
+model WorkerLog {
+  id          String         @id @default(uuid())
+  worker      String                           // 'coletor-pncp' | 'coletor-comprasnet'
+  status      WorkerStatus
+  fonte       FonteEnum?
+  totalFetched Int?          @map("total_fetched")
+  totalNew    Int?           @map("total_new")
+  totalDupes  Int?           @map("total_dupes")
+  errorMsg    String?        @map("error_msg") @db.Text
+  startedAt   DateTime       @map("started_at")
+  finishedAt  DateTime?      @map("finished_at")
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  @@index([worker])
+  @@index([status])
+  @@index([createdAt])
+  @@map("worker_logs")
+}
+
+enum WorkerStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+  PARTIAL
+}
