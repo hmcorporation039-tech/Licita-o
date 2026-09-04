@@ -1,9 +1,51 @@
 // ============================================================
-// cypress/e2e/api.cy.ts — Testes da API REST (users, monitored-items,
-// rematch, matches, tenders) rodando contra o banco real (Supabase)
+// cypress/e2e/api.cy.ts — Testes da API REST (auth, monitored-items,
+// rematch, matches, tenders) rodando contra o banco real (Railway)
 // ============================================================
 
 const uniqueEmail = () => `cypress-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`
+const TEST_PASSWORD = 'CypressTest123!'
+
+function authHeaders(token: string) {
+  return { Authorization: `Bearer ${token}` }
+}
+
+// Não existe mais autocadastro aberto — todo usuário de teste é criado
+// pelo admin seedado via `npx ts-node scripts/createAdmin.ts` (ver
+// cypress.config.ts pras credenciais).
+function loginAsAdmin() {
+  return cy
+    .request('POST', '/api/auth/login', {
+      email: Cypress.env('ADMIN_EMAIL'),
+      password: Cypress.env('ADMIN_PASSWORD'),
+    })
+    .then((res) => res.body.token as string)
+}
+
+function createTestUser() {
+  return loginAsAdmin().then((adminToken) => {
+    const email = uniqueEmail()
+    return cy
+      .request({
+        method: 'POST',
+        url: '/api/admin/users',
+        headers: authHeaders(adminToken),
+        body: { email, password: TEST_PASSWORD, name: 'Cypress Tester' },
+      })
+      .then(() =>
+        cy.request('POST', '/api/auth/login', { email, password: TEST_PASSWORD }).then((loginRes) => ({
+          userId: loginRes.body.user.id as string,
+          token: loginRes.body.token as string,
+        }))
+      )
+  })
+}
+
+// Roda uma vez antes de tudo — garante que existe pelo menos uma licitação
+// "notebook" determinística (não depende do que o PNCP publicou recentemente).
+before(() => {
+  cy.task('seedFixtureTenders')
+})
 
 describe('API — health', () => {
   it('responde ok', () => {
@@ -11,24 +53,71 @@ describe('API — health', () => {
   })
 })
 
-describe('API — fluxo completo de usuário e item monitorado', () => {
-  let userId: string
-  let otherUserId: string
-  let itemId: string
-  let matchId: string
-
-  it('cria um usuário', () => {
-    cy.request('POST', '/api/users', { email: uniqueEmail(), name: 'Cypress Tester' }).then((res) => {
-      expect(res.status).to.eq(201)
-      expect(res.body).to.have.property('id')
-      userId = res.body.id
+describe('API — autenticação', () => {
+  it('rejeita requisição sem token (401)', () => {
+    cy.request({ url: '/api/monitored-items', failOnStatusCode: false }).then((res) => {
+      expect(res.status).to.eq(401)
     })
   })
 
-  it('cria um segundo usuário (para teste de ownership)', () => {
-    cy.request('POST', '/api/users', { email: uniqueEmail() }).then((res) => {
-      expect(res.status).to.eq(201)
-      otherUserId = res.body.id
+  it('rejeita login com senha errada', () => {
+    createTestUser().then(({ userId }) => {
+      cy.request({
+        method: 'POST',
+        url: '/api/auth/login',
+        body: { email: `nao-existe-${userId}@example.com`, password: 'errada' },
+        failOnStatusCode: false,
+      }).then((res) => {
+        expect(res.status).to.eq(401)
+      })
+    })
+  })
+
+  it('usuário comum não consegue criar outro usuário (403)', () => {
+    createTestUser().then(({ token }) => {
+      cy.request({
+        method: 'POST',
+        url: '/api/admin/users',
+        headers: authHeaders(token),
+        body: { email: uniqueEmail(), password: TEST_PASSWORD },
+        failOnStatusCode: false,
+      }).then((res) => {
+        expect(res.status).to.eq(403)
+      })
+    })
+  })
+
+  it('admin consegue criar usuário com prazo de acesso e ele expira corretamente', () => {
+    loginAsAdmin().then((adminToken) => {
+      const email = uniqueEmail()
+      cy.request({
+        method: 'POST',
+        url: '/api/admin/users',
+        headers: authHeaders(adminToken),
+        body: { email, password: TEST_PASSWORD, diasValidade: 5 },
+      }).then((res) => {
+        expect(res.status).to.eq(201)
+        expect(res.body.accessExpiresAt).to.be.a('string')
+        const expiresAt = new Date(res.body.accessExpiresAt).getTime()
+        const fiveDaysFromNow = Date.now() + 5 * 24 * 60 * 60 * 1000
+        expect(Math.abs(expiresAt - fiveDaysFromNow)).to.be.lessThan(60_000)
+      })
+    })
+  })
+})
+
+describe('API — fluxo completo de usuário e item monitorado', () => {
+  let token: string
+  let otherToken: string
+  let itemId: string
+  let matchId: string
+
+  it('cria dois usuários (um para teste de ownership)', () => {
+    createTestUser().then((u) => {
+      token = u.token
+    })
+    createTestUser().then((u) => {
+      otherToken = u.token
     })
   })
 
@@ -37,7 +126,8 @@ describe('API — fluxo completo de usuário e item monitorado', () => {
       cy.request({
         method: 'POST',
         url: '/api/monitored-items',
-        body: { userId, name: 'Item vazio' },
+        headers: authHeaders(token),
+        body: { name: 'Item vazio' },
         failOnStatusCode: false,
       })
     ).then((res) => {
@@ -47,10 +137,11 @@ describe('API — fluxo completo de usuário e item monitorado', () => {
 
   it('cria um item monitorado com a keyword "notebook"', () => {
     cy.then(() =>
-      cy.request('POST', '/api/monitored-items', {
-        userId,
-        name: 'Notebooks para o escritório',
-        keywords: ['notebook'],
+      cy.request({
+        method: 'POST',
+        url: '/api/monitored-items',
+        headers: authHeaders(token),
+        body: { name: 'Notebooks para o escritório', keywords: ['notebook'] },
       })
     ).then((res) => {
       expect(res.status).to.eq(201)
@@ -61,7 +152,7 @@ describe('API — fluxo completo de usuário e item monitorado', () => {
   })
 
   it('lista os itens monitorados do usuário', () => {
-    cy.then(() => cy.request(`/api/monitored-items?userId=${userId}`)).then((res) => {
+    cy.then(() => cy.request({ url: '/api/monitored-items', headers: authHeaders(token) })).then((res) => {
       expect(res.status).to.eq(200)
       expect(res.body).to.be.an('array')
       expect(res.body.map((i: { id: string }) => i.id)).to.include(itemId)
@@ -69,7 +160,7 @@ describe('API — fluxo completo de usuário e item monitorado', () => {
   })
 
   it('busca o item monitorado por id', () => {
-    cy.then(() => cy.request(`/api/monitored-items/${itemId}`)).then((res) => {
+    cy.then(() => cy.request({ url: `/api/monitored-items/${itemId}`, headers: authHeaders(token) })).then((res) => {
       expect(res.status).to.eq(200)
       expect(res.body.id).to.eq(itemId)
     })
@@ -77,7 +168,12 @@ describe('API — fluxo completo de usuário e item monitorado', () => {
 
   it('atualiza o item monitorado', () => {
     cy.then(() =>
-      cy.request('PATCH', `/api/monitored-items/${itemId}`, { name: 'Notebooks e periféricos' })
+      cy.request({
+        method: 'PATCH',
+        url: `/api/monitored-items/${itemId}`,
+        headers: authHeaders(token),
+        body: { name: 'Notebooks e periféricos' },
+      })
     ).then((res) => {
       expect(res.status).to.eq(200)
       expect(res.body.name).to.eq('Notebooks e periféricos')
@@ -89,7 +185,8 @@ describe('API — fluxo completo de usuário e item monitorado', () => {
       cy.request({
         method: 'PATCH',
         url: `/api/monitored-items/${itemId}`,
-        body: { userId: otherUserId, name: 'Hackeado' },
+        headers: authHeaders(otherToken),
+        body: { name: 'Hackeado' },
         failOnStatusCode: false,
       })
     ).then((res) => {
@@ -98,7 +195,9 @@ describe('API — fluxo completo de usuário e item monitorado', () => {
   })
 
   it('roda o rematch e encontra licitações já coletadas', () => {
-    cy.then(() => cy.request('POST', `/api/monitored-items/${itemId}/rematch`, { userId })).then((res) => {
+    cy.then(() =>
+      cy.request({ method: 'POST', url: `/api/monitored-items/${itemId}/rematch`, headers: authHeaders(token) })
+    ).then((res) => {
       expect(res.status).to.eq(200)
       // A base já tem licitações reais do PNCP contendo "notebook" no objeto
       expect(res.body.matchesFound).to.be.greaterThan(0)
@@ -106,7 +205,7 @@ describe('API — fluxo completo de usuário e item monitorado', () => {
   })
 
   it('lista os matches do usuário e encontra o match recém-criado', () => {
-    cy.then(() => cy.request(`/api/matches?userId=${userId}`)).then((res) => {
+    cy.then(() => cy.request({ url: '/api/matches', headers: authHeaders(token) })).then((res) => {
       expect(res.status).to.eq(200)
       expect(res.body.items).to.be.an('array')
       expect(res.body.total).to.be.greaterThan(0)
@@ -118,14 +217,16 @@ describe('API — fluxo completo de usuário e item monitorado', () => {
   })
 
   it('marca o match como lido', () => {
-    cy.then(() => cy.request('PATCH', `/api/matches/${matchId}`, { read: true })).then((res) => {
+    cy.then(() =>
+      cy.request({ method: 'PATCH', url: `/api/matches/${matchId}`, headers: authHeaders(token), body: { read: true } })
+    ).then((res) => {
       expect(res.status).to.eq(200)
       expect(res.body.read).to.eq(true)
     })
   })
 
   it('feed de matches não-lidos não inclui mais esse match', () => {
-    cy.then(() => cy.request(`/api/matches?userId=${userId}&unreadOnly=true`)).then((res) => {
+    cy.then(() => cy.request({ url: '/api/matches?unreadOnly=true', headers: authHeaders(token) })).then((res) => {
       const ids = res.body.items.map((m: { id: string }) => m.id)
       expect(ids).to.not.include(matchId)
     })
@@ -136,7 +237,7 @@ describe('API — fluxo completo de usuário e item monitorado', () => {
       cy.request({
         method: 'DELETE',
         url: `/api/monitored-items/${itemId}`,
-        body: { userId: otherUserId },
+        headers: authHeaders(otherToken),
         failOnStatusCode: false,
       })
     ).then((res) => {
@@ -145,14 +246,16 @@ describe('API — fluxo completo de usuário e item monitorado', () => {
   })
 
   it('deleta o item monitorado', () => {
-    cy.then(() => cy.request('DELETE', `/api/monitored-items/${itemId}`, { userId })).then((res) => {
+    cy.then(() =>
+      cy.request({ method: 'DELETE', url: `/api/monitored-items/${itemId}`, headers: authHeaders(token) })
+    ).then((res) => {
       expect(res.status).to.eq(204)
     })
   })
 
   it('item deletado não é mais encontrado', () => {
     cy.then(() =>
-      cy.request({ url: `/api/monitored-items/${itemId}`, failOnStatusCode: false })
+      cy.request({ url: `/api/monitored-items/${itemId}`, headers: authHeaders(token), failOnStatusCode: false })
     ).then((res) => {
       expect(res.status).to.eq(404)
     })
@@ -160,8 +263,16 @@ describe('API — fluxo completo de usuário e item monitorado', () => {
 })
 
 describe('API — feed público de licitações', () => {
+  let token: string
+
+  it('setup: cria usuário', () => {
+    createTestUser().then((u) => {
+      token = u.token
+    })
+  })
+
   it('lista licitações paginadas', () => {
-    cy.request('/api/tenders?page=1&pageSize=5').then((res) => {
+    cy.then(() => cy.request({ url: '/api/tenders?page=1&pageSize=5', headers: authHeaders(token) })).then((res) => {
       expect(res.status).to.eq(200)
       expect(res.body.items).to.have.length(5)
       expect(res.body.total).to.be.greaterThan(0)
@@ -169,16 +280,18 @@ describe('API — feed público de licitações', () => {
   })
 
   it('filtra por UF', () => {
-    cy.request('/api/tenders?uf=SP&page=1&pageSize=10').then((res) => {
+    cy.then(() =>
+      cy.request({ url: '/api/tenders?uf=SP&page=1&pageSize=10', headers: authHeaders(token) })
+    ).then((res) => {
       expect(res.status).to.eq(200)
       res.body.items.forEach((t: { uf: string }) => expect(t.uf).to.eq('SP'))
     })
   })
 
   it('busca uma licitação específica com seus itens', () => {
-    cy.request('/api/tenders?page=1&pageSize=1').then((listRes) => {
+    cy.then(() => cy.request({ url: '/api/tenders?page=1&pageSize=1', headers: authHeaders(token) })).then((listRes) => {
       const id = listRes.body.items[0].id
-      cy.request(`/api/tenders/${id}`).then((res) => {
+      cy.request({ url: `/api/tenders/${id}`, headers: authHeaders(token) }).then((res) => {
         expect(res.status).to.eq(200)
         expect(res.body.id).to.eq(id)
         expect(res.body).to.have.property('items')
@@ -187,39 +300,47 @@ describe('API — feed público de licitações', () => {
   })
 
   it('404 para licitação inexistente', () => {
-    cy.request({ url: '/api/tenders/00000000-0000-0000-0000-000000000000', failOnStatusCode: false }).then(
-      (res) => {
-        expect(res.status).to.eq(404)
-      }
-    )
+    cy.then(() =>
+      cy.request({
+        url: '/api/tenders/00000000-0000-0000-0000-000000000000',
+        headers: authHeaders(token),
+        failOnStatusCode: false,
+      })
+    ).then((res) => {
+      expect(res.status).to.eq(404)
+    })
   })
 })
 
 describe('API — checklist de habilitação por licitação', () => {
-  let userId: string
+  let token: string
   let tenderId: string
 
-  it('setup: cria usuário e pega uma licitação real', () => {
-    cy.request('POST', '/api/users', { email: uniqueEmail() }).then((res) => {
-      userId = res.body.id
+  it('setup: cria usuário', () => {
+    createTestUser().then((u) => {
+      token = u.token
     })
-    cy.then(() => cy.request('/api/tenders?page=1&pageSize=1')).then((res) => {
+  })
+
+  it('setup: pega uma licitação real', () => {
+    cy.then(() => cy.request({ url: '/api/tenders?page=1&pageSize=1', headers: authHeaders(token) })).then((res) => {
       tenderId = res.body.items[0].id
     })
   })
 
-  it('rejeita sem userId', () => {
+  it('rejeita sem token (401)', () => {
     cy.then(() =>
       cy.request({ url: `/api/tenders/${tenderId}/checklist`, failOnStatusCode: false })
     ).then((res) => {
-      expect(res.status).to.eq(400)
+      expect(res.status).to.eq(401)
     })
   })
 
   it('404 para licitação inexistente', () => {
     cy.then(() =>
       cy.request({
-        url: `/api/tenders/00000000-0000-0000-0000-000000000000/checklist?userId=${userId}`,
+        url: '/api/tenders/00000000-0000-0000-0000-000000000000/checklist',
+        headers: authHeaders(token),
         failOnStatusCode: false,
       })
     ).then((res) => {
@@ -228,7 +349,7 @@ describe('API — checklist de habilitação por licitação', () => {
   })
 
   it('cria o checklist a partir do template na primeira consulta', () => {
-    cy.then(() => cy.request(`/api/tenders/${tenderId}/checklist?userId=${userId}`)).then((res) => {
+    cy.then(() => cy.request({ url: `/api/tenders/${tenderId}/checklist`, headers: authHeaders(token) })).then((res) => {
       expect(res.status).to.eq(200)
       expect(res.body.items).to.be.an('array').with.length.greaterThan(20)
       expect(res.body.items[0]).to.include.keys('id', 'section', 'label', 'checked', 'custom')
@@ -238,10 +359,10 @@ describe('API — checklist de habilitação por licitação', () => {
 
   it('não recria o checklist numa segunda consulta (mesmo id)', () => {
     let firstId: string
-    cy.then(() => cy.request(`/api/tenders/${tenderId}/checklist?userId=${userId}`))
+    cy.then(() => cy.request({ url: `/api/tenders/${tenderId}/checklist`, headers: authHeaders(token) }))
       .then((res) => {
         firstId = res.body.id
-        return cy.request(`/api/tenders/${tenderId}/checklist?userId=${userId}`)
+        return cy.request({ url: `/api/tenders/${tenderId}/checklist`, headers: authHeaders(token) })
       })
       .then((res) => {
         expect(res.body.id).to.eq(firstId)
@@ -249,7 +370,7 @@ describe('API — checklist de habilitação por licitação', () => {
   })
 
   it('marca itens e adiciona um item customizado', () => {
-    cy.then(() => cy.request(`/api/tenders/${tenderId}/checklist?userId=${userId}`)).then((getRes) => {
+    cy.then(() => cy.request({ url: `/api/tenders/${tenderId}/checklist`, headers: authHeaders(token) })).then((getRes) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const items = getRes.body.items.map((i: any, idx: number) => (idx === 0 ? { ...i, checked: true } : i))
       items.push({
@@ -259,7 +380,7 @@ describe('API — checklist de habilitação por licitação', () => {
         checked: false,
         custom: true,
       })
-      return cy.request('PUT', `/api/tenders/${tenderId}/checklist`, { userId, items })
+      return cy.request({ method: 'PUT', url: `/api/tenders/${tenderId}/checklist`, headers: authHeaders(token), body: { items } })
     }).then((putRes) => {
       expect(putRes.status).to.eq(200)
       expect(putRes.body.items).to.have.length.greaterThan(20)
@@ -270,7 +391,7 @@ describe('API — checklist de habilitação por licitação', () => {
   })
 
   it('reflete o estado salvo numa consulta seguinte', () => {
-    cy.then(() => cy.request(`/api/tenders/${tenderId}/checklist?userId=${userId}`)).then((res) => {
+    cy.then(() => cy.request({ url: `/api/tenders/${tenderId}/checklist`, headers: authHeaders(token) })).then((res) => {
       expect(res.body.items[0].checked).to.eq(true)
       expect(res.body.items.some((i: { id: string }) => i.id === 'custom-1')).to.eq(true)
     })
@@ -278,12 +399,12 @@ describe('API — checklist de habilitação por licitação', () => {
 })
 
 describe('API — filtro de raio de distância', () => {
-  let userId: string
+  let token: string
   let itemId: string
 
   it('setup: cria usuário', () => {
-    cy.request('POST', '/api/users', { email: uniqueEmail() }).then((res) => {
-      userId = res.body.id
+    createTestUser().then((u) => {
+      token = u.token
     })
   })
 
@@ -292,7 +413,8 @@ describe('API — filtro de raio de distância', () => {
       cy.request({
         method: 'POST',
         url: '/api/monitored-items',
-        body: { userId, name: 'Serviço local', keywords: ['limpeza'], raioKm: 100 },
+        headers: authHeaders(token),
+        body: { name: 'Serviço local', keywords: ['limpeza'], raioKm: 100 },
         failOnStatusCode: false,
       })
     ).then((res) => {
@@ -305,8 +427,8 @@ describe('API — filtro de raio de distância', () => {
       cy.request({
         method: 'POST',
         url: '/api/monitored-items',
+        headers: authHeaders(token),
         body: {
-          userId,
           name: 'Serviço local',
           keywords: ['limpeza'],
           raioKm: 100,
@@ -322,13 +444,17 @@ describe('API — filtro de raio de distância', () => {
 
   it('cria item com raio de distância e geocodifica a cidade de referência', () => {
     cy.then(() =>
-      cy.request('POST', '/api/monitored-items', {
-        userId,
-        name: 'Serviço de limpeza local',
-        keywords: ['limpeza'],
-        raioKm: 150,
-        origemMunicipio: 'Juazeiro',
-        origemUf: 'BA',
+      cy.request({
+        method: 'POST',
+        url: '/api/monitored-items',
+        headers: authHeaders(token),
+        body: {
+          name: 'Serviço de limpeza local',
+          keywords: ['limpeza'],
+          raioKm: 150,
+          origemMunicipio: 'Juazeiro',
+          origemUf: 'BA',
+        },
       })
     ).then((res) => {
       expect(res.status).to.eq(201)
@@ -343,15 +469,19 @@ describe('API — filtro de raio de distância', () => {
 
       // O rematch deve rodar sem erro respeitando o filtro de raio (não afirmamos
       // um número exato de matches — depende dos dados coletados no momento)
-      cy.request('POST', `/api/monitored-items/${itemId}/rematch`, { userId }).then((rematchRes) => {
-        expect(rematchRes.status).to.eq(200)
-        expect(rematchRes.body).to.have.property('matchesFound')
-      })
+      cy.request({ method: 'POST', url: `/api/monitored-items/${itemId}/rematch`, headers: authHeaders(token) }).then(
+        (rematchRes) => {
+          expect(rematchRes.status).to.eq(200)
+          expect(rematchRes.body).to.have.property('matchesFound')
+        }
+      )
     })
   })
 
   it('edita só o raio, mantendo a cidade de referência já cadastrada', () => {
-    cy.then(() => cy.request('PATCH', `/api/monitored-items/${itemId}`, { userId, raioKm: 300 })).then((res) => {
+    cy.then(() =>
+      cy.request({ method: 'PATCH', url: `/api/monitored-items/${itemId}`, headers: authHeaders(token), body: { raioKm: 300 } })
+    ).then((res) => {
       expect(res.status).to.eq(200)
       expect(res.body.raioKm).to.eq(300)
       expect(res.body.origemMunicipio).to.eq('Juazeiro')
@@ -360,7 +490,9 @@ describe('API — filtro de raio de distância', () => {
   })
 
   it('remove o filtro de raio explicitamente (raioKm: null)', () => {
-    cy.then(() => cy.request('PATCH', `/api/monitored-items/${itemId}`, { userId, raioKm: null })).then((res) => {
+    cy.then(() =>
+      cy.request({ method: 'PATCH', url: `/api/monitored-items/${itemId}`, headers: authHeaders(token), body: { raioKm: null } })
+    ).then((res) => {
       expect(res.status).to.eq(200)
       expect(res.body.raioKm).to.be.null
       expect(res.body.origemLat).to.be.null
@@ -370,11 +502,11 @@ describe('API — filtro de raio de distância', () => {
 })
 
 describe('API — filtro de modalidades', () => {
-  let userId: string
+  let token: string
 
   it('setup: cria usuário', () => {
-    cy.request('POST', '/api/users', { email: uniqueEmail() }).then((res) => {
-      userId = res.body.id
+    createTestUser().then((u) => {
+      token = u.token
     })
   })
 
@@ -383,7 +515,8 @@ describe('API — filtro de modalidades', () => {
       cy.request({
         method: 'POST',
         url: '/api/monitored-items',
-        body: { userId, name: 'Item', keywords: ['notebook'], modalidades: ['MODALIDADE_INVENTADA'] },
+        headers: authHeaders(token),
+        body: { name: 'Item', keywords: ['notebook'], modalidades: ['MODALIDADE_INVENTADA'] },
         failOnStatusCode: false,
       })
     ).then((res) => {
@@ -393,35 +526,47 @@ describe('API — filtro de modalidades', () => {
 
   it('encontra o match quando a modalidade do item bate com a da licitação', () => {
     cy.then(() =>
-      cy.request('POST', '/api/monitored-items', {
-        userId,
-        name: 'Notebooks — só dispensa sem disputa',
-        keywords: ['notebook'],
-        modalidades: ['DISPENSA_SEM_DISPUTA'],
+      cy.request({
+        method: 'POST',
+        url: '/api/monitored-items',
+        headers: authHeaders(token),
+        body: {
+          name: 'Notebooks — só dispensa sem disputa',
+          keywords: ['notebook'],
+          modalidades: ['DISPENSA_SEM_DISPUTA'],
+        },
       })
-    ).then((res) => {
-      const itemId = res.body.id
-      return cy.request('POST', `/api/monitored-items/${itemId}/rematch`, { userId })
-    }).then((rematchRes) => {
-      expect(rematchRes.status).to.eq(200)
-      expect(rematchRes.body.matchesFound).to.be.greaterThan(0)
-    })
+    )
+      .then((res) => {
+        const itemId = res.body.id
+        return cy.request({ method: 'POST', url: `/api/monitored-items/${itemId}/rematch`, headers: authHeaders(token) })
+      })
+      .then((rematchRes) => {
+        expect(rematchRes.status).to.eq(200)
+        expect(rematchRes.body.matchesFound).to.be.greaterThan(0)
+      })
   })
 
   it('não encontra o match quando a modalidade do item não bate com a da licitação', () => {
     cy.then(() =>
-      cy.request('POST', '/api/monitored-items', {
-        userId,
-        name: 'Notebooks — só concurso (não deve bater)',
-        keywords: ['notebook'],
-        modalidades: ['CONCURSO'],
+      cy.request({
+        method: 'POST',
+        url: '/api/monitored-items',
+        headers: authHeaders(token),
+        body: {
+          name: 'Notebooks — só concurso (não deve bater)',
+          keywords: ['notebook'],
+          modalidades: ['CONCURSO'],
+        },
       })
-    ).then((res) => {
-      const itemId = res.body.id
-      return cy.request('POST', `/api/monitored-items/${itemId}/rematch`, { userId })
-    }).then((rematchRes) => {
-      expect(rematchRes.status).to.eq(200)
-      expect(rematchRes.body.matchesFound).to.eq(0)
-    })
+    )
+      .then((res) => {
+        const itemId = res.body.id
+        return cy.request({ method: 'POST', url: `/api/monitored-items/${itemId}/rematch`, headers: authHeaders(token) })
+      })
+      .then((rematchRes) => {
+        expect(rematchRes.status).to.eq(200)
+        expect(rematchRes.body.matchesFound).to.eq(0)
+      })
   })
 })

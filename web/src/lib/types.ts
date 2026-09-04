@@ -6,6 +6,18 @@ export interface User {
   id: string
   email: string
   name: string | null
+  isAdmin: boolean
+}
+
+export interface AdminUser {
+  id: string
+  email: string
+  name: string | null
+  isAdmin: boolean
+  active: boolean
+  accessExpiresAt: string | null
+  createdAt: string
+  hasPassword: boolean
 }
 
 export interface MonitoredItem {
@@ -77,6 +89,15 @@ export interface TenderMatch {
   createdAt: string
   tender: Tender
   monitoredItem: MonitoredItem
+}
+
+export interface DashboardData {
+  itensMonitoradosAtivos: number
+  matchesNaoLidos: number
+  matchesTotal: number
+  ultimosMatches: TenderMatch[]
+  documentosVencendoEmBreve: { id: string; nome: string; dataValidade: string }[]
+  proximosPrazos: { tenderId: string; tenderObjeto: string; label: string; date: string }[]
 }
 
 export interface CompanyDocument {

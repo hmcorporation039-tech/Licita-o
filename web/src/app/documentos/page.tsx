@@ -48,10 +48,10 @@ export default function DocumentosPage() {
   const [observacao, setObservacao] = useState('')
   const [creating, setCreating] = useState(false)
 
-  async function load(userId: string) {
+  async function load() {
     setLoading(true)
     try {
-      const data = await api.get<CompanyDocument[]>(`/api/company-documents?userId=${userId}`)
+      const data = await api.get<CompanyDocument[]>('/api/company-documents')
       setDocs(data)
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : 'Erro ao carregar documentos')
@@ -61,7 +61,7 @@ export default function DocumentosPage() {
   }
 
   useEffect(() => {
-    if (user) load(user.id)
+    if (user) load()
   }, [user])
 
   function onSelectTipo(value: string) {
@@ -79,7 +79,6 @@ export default function DocumentosPage() {
     setCreating(true)
     try {
       await api.post('/api/company-documents', {
-        userId: user.id,
         tipo: tipo || null,
         nome,
         dataEmissao: dataEmissao || null,
@@ -91,7 +90,7 @@ export default function DocumentosPage() {
       setDataEmissao('')
       setDataValidade('')
       setObservacao('')
-      await load(user.id)
+      await load()
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : 'Erro ao cadastrar documento')
     } finally {
@@ -102,8 +101,8 @@ export default function DocumentosPage() {
   async function handleDelete(docId: string) {
     if (!user) return
     if (!confirm('Remover este documento?')) return
-    await api.delete(`/api/company-documents/${docId}`, { userId: user.id })
-    await load(user.id)
+    await api.delete(`/api/company-documents/${docId}`)
+    await load()
   }
 
   if (!user) return null

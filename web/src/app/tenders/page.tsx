@@ -64,7 +64,7 @@ export default function TendersPage() {
       if (publicacaoInicio) qs.set('publicacaoInicio', publicacaoInicio)
       if (publicacaoFim) qs.set('publicacaoFim', publicacaoFim)
       if (q) qs.set('q', q)
-      if (somenteRelacionadas) qs.set('userId', user.id)
+      if (somenteRelacionadas) qs.set('somenteRelacionadas', 'true')
       api
         .get<Paginated<Tender>>(`/api/tenders?${qs.toString()}`)
         .then(setData)

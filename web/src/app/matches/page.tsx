@@ -20,7 +20,7 @@ export default function MatchesPage() {
   function load() {
     if (!user) return
     setLoading(true)
-    const qs = new URLSearchParams({ userId: user.id, page: '1', pageSize: '30' })
+    const qs = new URLSearchParams({ page: '1', pageSize: '30' })
     if (unreadOnly) qs.set('unreadOnly', 'true')
     api
       .get<Paginated<TenderMatch>>(`/api/matches?${qs.toString()}`)

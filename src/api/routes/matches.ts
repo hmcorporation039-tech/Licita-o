@@ -10,7 +10,6 @@ import { asyncHandler, ApiError } from '../asyncHandler'
 export const matchesRouter = Router()
 
 const querySchema = z.object({
-  userId: z.string().uuid(),
   unreadOnly: z
     .enum(['true', 'false'])
     .optional()
@@ -22,9 +21,9 @@ const querySchema = z.object({
 matchesRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const { userId, unreadOnly, page, pageSize } = querySchema.parse(req.query)
+    const { unreadOnly, page, pageSize } = querySchema.parse(req.query)
 
-    const where = { userId, ...(unreadOnly ? { read: false } : {}) }
+    const where = { userId: req.userId!, ...(unreadOnly ? { read: false } : {}) }
 
     const [items, total] = await Promise.all([
       prisma.tenderMatch.findMany({
@@ -46,6 +45,7 @@ matchesRouter.patch(
   asyncHandler(async (req, res) => {
     const match = await prisma.tenderMatch.findUnique({ where: { id: req.params.id } })
     if (!match) throw new ApiError(404, 'Match não encontrado')
+    if (match.userId !== req.userId) throw new ApiError(403, 'Este match não pertence a você')
 
     const read = typeof req.body?.read === 'boolean' ? req.body.read : undefined
     if (read === undefined) throw new ApiError(400, 'Campo read (boolean) é obrigatório')

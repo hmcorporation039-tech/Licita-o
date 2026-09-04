@@ -2,6 +2,8 @@
 // lib/api.ts — Cliente HTTP para a API REST da plataforma
 // ============================================================
 
+import { clearSessionUser, getSessionToken } from './session'
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3333'
 
 export class ApiRequestError extends Error {
@@ -13,9 +15,14 @@ export class ApiRequestError extends Error {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getSessionToken()
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options?.headers,
+    },
   })
 
   if (res.status === 204) return undefined as T
@@ -23,6 +30,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const body = await res.json().catch(() => ({}))
 
   if (!res.ok) {
+    // Sessão inválida/expirada — limpa e manda pro login, exceto se a
+    // própria tentativa de login que falhou (senão criaria um loop).
+    if (res.status === 401 && !path.startsWith('/api/auth/login') && typeof window !== 'undefined') {
+      clearSessionUser()
+      window.location.href = '/login'
+    }
     throw new ApiRequestError(res.status, body.error ?? `Erro ${res.status}`)
   }
 

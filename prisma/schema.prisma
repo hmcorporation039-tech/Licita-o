@@ -17,9 +17,17 @@ datasource db {
 // ============================================================
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String?
+  id           String    @id @default(uuid())
+  email        String    @unique
+  name         String?
+  // null = conta antiga da fase pré-login, ainda sem senha definida —
+  // ver POST /api/auth/set-password.
+  passwordHash String?   @map("password_hash")
+  isAdmin      Boolean   @default(false) @map("is_admin")
+  // Acesso por prazo determinado (contas de teste/clientes) — null = sem
+  // validade. Expirada, o login passa a ser recusado (ver authMiddleware.ts)
+  // mesmo com senha correta.
+  accessExpiresAt DateTime? @map("access_expires_at")
   plan      Plan     @default(FREE)
   active    Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at")

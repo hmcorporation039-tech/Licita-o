@@ -1,18 +1,25 @@
 // ============================================================
-// lib/session.ts — Sessão simples via localStorage (sem auth real ainda)
+// lib/session.ts — Sessão via token (JWT) + dados do usuário logado
 // ============================================================
 
-const KEY = 'licitacao-platform:user'
+const TOKEN_KEY = 'licitacao-platform:token'
+const USER_KEY = 'licitacao-platform:user'
 
 export interface SessionUser {
   id: string
   email: string
   name: string | null
+  isAdmin: boolean
+}
+
+export function getSessionToken(): string | null {
+  if (typeof window === 'undefined') return null
+  return window.localStorage.getItem(TOKEN_KEY)
 }
 
 export function getSessionUser(): SessionUser | null {
   if (typeof window === 'undefined') return null
-  const raw = window.localStorage.getItem(KEY)
+  const raw = window.localStorage.getItem(USER_KEY)
   if (!raw) return null
   try {
     return JSON.parse(raw) as SessionUser
@@ -21,10 +28,12 @@ export function getSessionUser(): SessionUser | null {
   }
 }
 
-export function setSessionUser(user: SessionUser) {
-  window.localStorage.setItem(KEY, JSON.stringify(user))
+export function setSession(token: string, user: SessionUser) {
+  window.localStorage.setItem(TOKEN_KEY, token)
+  window.localStorage.setItem(USER_KEY, JSON.stringify(user))
 }
 
 export function clearSessionUser() {
-  window.localStorage.removeItem(KEY)
+  window.localStorage.removeItem(TOKEN_KEY)
+  window.localStorage.removeItem(USER_KEY)
 }

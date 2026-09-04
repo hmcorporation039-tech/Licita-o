@@ -105,7 +105,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
     setLoading(true)
     Promise.all([
       api.get<Tender>(`/api/tenders/${id}`),
-      api.get<TenderChecklist>(`/api/tenders/${id}/checklist?userId=${user.id}`),
+      api.get<TenderChecklist>(`/api/tenders/${id}/checklist`),
     ])
       .then(([tenderData, checklistData]) => {
         setTender(tenderData)
@@ -114,7 +114,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
       .finally(() => setLoading(false))
 
     api
-      .get<CompanyDocument[]>(`/api/company-documents?userId=${user.id}`)
+      .get<CompanyDocument[]>('/api/company-documents')
       .then((docs) => setOwnedDocTypes(validDocumentTypes(docs)))
       .catch((err) => console.error(err))
 
@@ -128,7 +128,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
       })
 
     api
-      .get<ParticipationPlan>(`/api/tenders/${id}/plano?userId=${user.id}`)
+      .get<ParticipationPlan>(`/api/tenders/${id}/plano`)
       .then(setPlan)
       .catch((err) => console.error(err))
   }, [id, user])
@@ -142,7 +142,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
       // busca o plano de novo pra esses marcos aparecerem sem precisar recarregar.
       if (user) {
         api
-          .get<ParticipationPlan>(`/api/tenders/${id}/plano?userId=${user.id}`)
+          .get<ParticipationPlan>(`/api/tenders/${id}/plano`)
           .then(setPlan)
           .catch((err) => console.error(err))
       }
@@ -173,7 +173,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
     if (!user) return
     setSaving(true)
     try {
-      await api.put(`/api/tenders/${id}/checklist`, { userId: user.id, items: nextItems })
+      await api.put(`/api/tenders/${id}/checklist`, { items: nextItems })
     } finally {
       setSaving(false)
     }
@@ -214,7 +214,6 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
     setPlanSaving(true)
     try {
       const result = await api.put<ParticipationPlan>(`/api/tenders/${id}/plano`, {
-        userId: user.id,
         status: nextStatus,
         milestones: nextMilestones,
       })

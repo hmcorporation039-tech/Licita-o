@@ -27,11 +27,14 @@ const querySchema = z.object({
   publicacaoInicio: z.coerce.date().optional(),
   publicacaoFim: z.coerce.date().optional(),
   q: z.string().trim().min(1).optional(),
-  // Quando informado, restringe o feed às licitações que deram match com
-  // algum item monitorado deste usuário (em vez do feed público completo) —
-  // o cruzamento em si é feito pelo matcher (word_similarity no objeto/itens
-  // + código CATMAT/CATSER), aqui só filtramos e classificamos o resultado.
-  userId: z.string().uuid().optional(),
+  // Quando true, restringe o feed às licitações que deram match com algum
+  // item monitorado do usuário logado (em vez do feed público completo) —
+  // o cruzamento em si é feito pelo matcher (casamento literal de palavra-
+  // chave + código CATMAT/CATSER), aqui só filtramos e classificamos.
+  somenteRelacionadas: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => v === 'true'),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(20),
 })
@@ -49,10 +52,11 @@ tendersRouter.get(
       publicacaoInicio,
       publicacaoFim,
       q,
-      userId,
+      somenteRelacionadas,
       page,
       pageSize,
     } = querySchema.parse(req.query)
+    const userId = somenteRelacionadas ? req.userId! : undefined
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const where: Record<string, any> = {}
@@ -166,7 +170,6 @@ const checklistItemSchema = z.object({
 })
 
 const putChecklistSchema = z.object({
-  userId: z.string().uuid(),
   items: z.array(checklistItemSchema).min(1),
 })
 
@@ -175,8 +178,7 @@ const putChecklistSchema = z.object({
 tendersRouter.get(
   '/:id/checklist',
   asyncHandler(async (req, res) => {
-    const userId = req.query.userId
-    if (typeof userId !== 'string') throw new ApiError(400, 'Parâmetro userId é obrigatório')
+    const userId = req.userId!
 
     const tender = await prisma.tender.findUnique({ where: { id: req.params.id }, select: { id: true } })
     if (!tender) throw new ApiError(404, 'Licitação não encontrada')
@@ -205,7 +207,8 @@ tendersRouter.get(
 tendersRouter.put(
   '/:id/checklist',
   asyncHandler(async (req, res) => {
-    const { userId, items } = putChecklistSchema.parse(req.body)
+    const { items } = putChecklistSchema.parse(req.body)
+    const userId = req.userId!
 
     const tender = await prisma.tender.findUnique({ where: { id: req.params.id }, select: { id: true } })
     if (!tender) throw new ApiError(404, 'Licitação não encontrada')
@@ -295,8 +298,7 @@ async function buildPlanResponse(tenderId: string, status: string, state: PlanSt
 tendersRouter.get(
   '/:id/plano',
   asyncHandler(async (req, res) => {
-    const userId = req.query.userId
-    if (typeof userId !== 'string') throw new ApiError(400, 'Parâmetro userId é obrigatório')
+    const userId = req.userId!
 
     const tender = await prisma.tender.findUnique({ where: { id: req.params.id }, select: { id: true } })
     if (!tender) throw new ApiError(404, 'Licitação não encontrada')
@@ -313,7 +315,6 @@ tendersRouter.get(
 )
 
 const putPlanoSchema = z.object({
-  userId: z.string().uuid(),
   status: z.enum(PARTICIPATION_STATUS_VALUES),
   milestones: z.array(
     z.object({
@@ -333,7 +334,8 @@ const putPlanoSchema = z.object({
 tendersRouter.put(
   '/:id/plano',
   asyncHandler(async (req, res) => {
-    const { userId, status, milestones } = putPlanoSchema.parse(req.body)
+    const { status, milestones } = putPlanoSchema.parse(req.body)
+    const userId = req.userId!
 
     const tender = await prisma.tender.findUnique({ where: { id: req.params.id }, select: { id: true } })
     if (!tender) throw new ApiError(404, 'Licitação não encontrada')

@@ -8,7 +8,7 @@ export default function Home() {
   const router = useRouter()
 
   useEffect(() => {
-    router.replace(getSessionUser() ? '/items' : '/login')
+    router.replace(getSessionUser() ? '/dashboard' : '/login')
   }, [router])
 
   return null

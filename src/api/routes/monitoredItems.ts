@@ -30,7 +30,6 @@ export const MODALIDADE_VALUES = [
 ] as const
 
 const createSchema = z.object({
-  userId: z.string().uuid(),
   name: z.string().min(1),
   keywords: z.array(z.string().min(1)).default([]),
   catmatCodes: z.array(z.string()).default([]),
@@ -47,7 +46,7 @@ const createSchema = z.object({
   origemUf: z.string().length(2).nullable().optional(),
 })
 
-const updateSchema = createSchema.partial().omit({ userId: true })
+const updateSchema = createSchema.partial()
 
 // Resolve nome+UF de cidade em lat/lng usando a base do IBGE
 function geocodeOrigem(municipio: string, uf: string): { lat: number; lng: number } {
@@ -58,10 +57,10 @@ function geocodeOrigem(municipio: string, uf: string): { lat: number; lng: numbe
   return { lat: geo.lat, lng: geo.lng }
 }
 
-async function assertOwnership(itemId: string, userId: string | undefined) {
+async function assertOwnership(itemId: string, userId: string) {
   const item = await prisma.monitoredItem.findUnique({ where: { id: itemId } })
   if (!item) throw new ApiError(404, 'Item monitorado não encontrado')
-  if (userId && item.userId !== userId) throw new ApiError(403, 'Este item não pertence ao usuário informado')
+  if (item.userId !== userId) throw new ApiError(403, 'Este item não pertence a você')
   return item
 }
 
@@ -85,7 +84,9 @@ monitoredItemsRouter.post(
       origemLng = geo.lng
     }
 
-    const item = await prisma.monitoredItem.create({ data: { ...body, origemLat, origemLng } })
+    const item = await prisma.monitoredItem.create({
+      data: { ...body, userId: req.userId!, origemLat, origemLng },
+    })
     res.status(201).json(item)
   })
 )
@@ -93,11 +94,8 @@ monitoredItemsRouter.post(
 monitoredItemsRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const userId = req.query.userId
-    if (typeof userId !== 'string') throw new ApiError(400, 'Parâmetro userId é obrigatório')
-
     const items = await prisma.monitoredItem.findMany({
-      where: { userId },
+      where: { userId: req.userId! },
       orderBy: { createdAt: 'desc' },
     })
     res.json(items)
@@ -107,7 +105,7 @@ monitoredItemsRouter.get(
 monitoredItemsRouter.get(
   '/:id',
   asyncHandler(async (req, res) => {
-    const item = await assertOwnership(req.params.id, typeof req.query.userId === 'string' ? req.query.userId : undefined)
+    const item = await assertOwnership(req.params.id, req.userId!)
     res.json(item)
   })
 )
@@ -115,8 +113,7 @@ monitoredItemsRouter.get(
 monitoredItemsRouter.patch(
   '/:id',
   asyncHandler(async (req, res) => {
-    const bodyUserId = typeof req.body?.userId === 'string' ? req.body.userId : undefined
-    const existing = await assertOwnership(req.params.id, bodyUserId)
+    const existing = await assertOwnership(req.params.id, req.userId!)
 
     const data = updateSchema.parse(req.body)
 
@@ -148,8 +145,7 @@ monitoredItemsRouter.patch(
 monitoredItemsRouter.delete(
   '/:id',
   asyncHandler(async (req, res) => {
-    const bodyUserId = typeof req.body?.userId === 'string' ? req.body.userId : undefined
-    await assertOwnership(req.params.id, bodyUserId)
+    await assertOwnership(req.params.id, req.userId!)
 
     await prisma.monitoredItem.delete({ where: { id: req.params.id } })
     res.status(204).send()
@@ -161,7 +157,7 @@ monitoredItemsRouter.delete(
 monitoredItemsRouter.post(
   '/:id/rematch',
   asyncHandler(async (req, res) => {
-    const item = await assertOwnership(req.params.id, typeof req.body?.userId === 'string' ? req.body.userId : undefined)
+    const item = await assertOwnership(req.params.id, req.userId!)
 
     const candidates = await findMatchingTendersForItem(
       {

@@ -60,10 +60,10 @@ export default function ItemsPage() {
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
-  async function loadItems(userId: string) {
+  async function loadItems() {
     setLoading(true)
     try {
-      const data = await api.get<MonitoredItem[]>(`/api/monitored-items?userId=${userId}`)
+      const data = await api.get<MonitoredItem[]>('/api/monitored-items')
       setItems(data)
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : 'Erro ao carregar itens')
@@ -73,7 +73,7 @@ export default function ItemsPage() {
   }
 
   useEffect(() => {
-    if (user) loadItems(user.id)
+    if (user) loadItems()
   }, [user])
 
   async function handleCreate(e: React.FormEvent) {
@@ -83,7 +83,6 @@ export default function ItemsPage() {
     setCreating(true)
     try {
       await api.post('/api/monitored-items', {
-        userId: user.id,
         name,
         keywords: keywords.split(',').map((k) => k.trim()).filter(Boolean),
         catmatCodes: catmatCodes.split(',').map((c) => c.trim()).filter(Boolean),
@@ -107,7 +106,7 @@ export default function ItemsPage() {
       setRaioKm('')
       setOrigemMunicipio('')
       setOrigemUf('')
-      await loadItems(user.id)
+      await loadItems()
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : 'Erro ao criar item')
     } finally {
@@ -142,7 +141,6 @@ export default function ItemsPage() {
     setEditSaving(true)
     try {
       await api.patch(`/api/monitored-items/${itemId}`, {
-        userId: user.id,
         name: editName,
         keywords: editKeywords.split(',').map((k) => k.trim()).filter(Boolean),
         catmatCodes: editCatmatCodes.split(',').map((c) => c.trim()).filter(Boolean),
@@ -156,7 +154,7 @@ export default function ItemsPage() {
         origemUf: editOrigemUf.trim() ? editOrigemUf.trim().toUpperCase() : null,
       })
       setEditingId(null)
-      await loadItems(user.id)
+      await loadItems()
     } catch (err) {
       setEditError(err instanceof ApiRequestError ? err.message : 'Erro ao salvar alterações')
     } finally {
@@ -167,23 +165,21 @@ export default function ItemsPage() {
   async function handleDelete(itemId: string) {
     if (!user) return
     if (!confirm('Remover este item monitorado?')) return
-    await api.delete(`/api/monitored-items/${itemId}`, { userId: user.id })
-    await loadItems(user.id)
+    await api.delete(`/api/monitored-items/${itemId}`)
+    await loadItems()
   }
 
   async function handleToggleActive(item: MonitoredItem) {
     if (!user) return
-    await api.patch(`/api/monitored-items/${item.id}`, { userId: user.id, active: !item.active })
-    await loadItems(user.id)
+    await api.patch(`/api/monitored-items/${item.id}`, { active: !item.active })
+    await loadItems()
   }
 
   async function handleRematch(itemId: string) {
     if (!user) return
     setRematchMsg((m) => ({ ...m, [itemId]: 'Buscando...' }))
     try {
-      const res = await api.post<{ matchesFound: number }>(`/api/monitored-items/${itemId}/rematch`, {
-        userId: user.id,
-      })
+      const res = await api.post<{ matchesFound: number }>(`/api/monitored-items/${itemId}/rematch`)
       setRematchMsg((m) => ({
         ...m,
         [itemId]:
