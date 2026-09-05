@@ -243,8 +243,12 @@ export default function TendersPage() {
           </label>
           <div className="flex items-center gap-3">
             {data && <span className="text-sm text-slate-500">{data.total} licitação(ões) encontrada(s)</span>}
-            <button type="button" onClick={clearFilters} className="text-sm text-slate-500 hover:underline">
-              Limpar filtros
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Limpar todas as pesquisas
             </button>
           </div>
         </div>
