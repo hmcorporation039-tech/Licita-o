@@ -17,6 +17,7 @@ export default function MatchesPage() {
   const [unreadOnly, setUnreadOnly] = useState(false)
   const [loading, setLoading] = useState(true)
   const [interesseMsg, setInteresseMsg] = useState<Record<string, string>>({})
+  const [clearing, setClearing] = useState(false)
 
   function load() {
     if (!user) return
@@ -48,16 +49,40 @@ export default function MatchesPage() {
     }
   }
 
+  async function clearAllMatches() {
+    if (!user) return
+    if (!confirm('Apagar todos os matches encontrados? Essa ação não pode ser desfeita.')) return
+    setClearing(true)
+    try {
+      await api.delete('/api/matches')
+      load()
+    } finally {
+      setClearing(false)
+    }
+  }
+
   if (!user) return null
 
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Meus matches</h1>
-        <label className="flex items-center gap-2 text-sm text-slate-600">
-          <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} />
-          Só não lidos
-        </label>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} />
+            Só não lidos
+          </label>
+          {data && data.total > 0 && (
+            <button
+              type="button"
+              onClick={clearAllMatches}
+              disabled={clearing}
+              className="rounded border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
+              {clearing ? 'Apagando...' : 'Apagar todos os matches'}
+            </button>
+          )}
+        </div>
       </div>
 
       {loading ? (

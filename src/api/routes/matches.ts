@@ -40,6 +40,16 @@ matchesRouter.get(
   })
 )
 
+// Apaga todos os matches do usuário de uma vez — útil pra "zerar" o feed
+// e deixar só o que a coleta encontrar dali pra frente.
+matchesRouter.delete(
+  '/',
+  asyncHandler(async (req, res) => {
+    const { count } = await prisma.tenderMatch.deleteMany({ where: { userId: req.userId! } })
+    res.json({ deleted: count })
+  })
+)
+
 matchesRouter.patch(
   '/:id',
   asyncHandler(async (req, res) => {
