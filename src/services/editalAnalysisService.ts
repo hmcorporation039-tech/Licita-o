@@ -9,6 +9,7 @@
 // e volte pra 'claude' depois — ver src/services/llm/.
 // ============================================================
 
+import axios from 'axios'
 import { prisma } from './tenderService'
 import { listPNCPDocuments, downloadPNCPDocument, pickMainDocument } from './pncpDocumentsService'
 import { extractPdfText } from './pdfTextService'
@@ -107,7 +108,15 @@ export async function runEditalAnalysis(tenderId: string): Promise<void> {
       },
     })
   } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err)
+    // A API não-oficial de documentos do PNCP (pncpDocumentsService) cai com
+    // frequência (fora do nosso controle) — em vez do axios "Request failed
+    // with status code 503" cru, mostra algo que a pessoa usuária entenda.
+    const isPncpDown = axios.isAxiosError(err) && (!err.response || err.response.status >= 500)
+    const errorMsg = isPncpDown
+      ? 'PNCP está indisponível no momento (não foi possível baixar os documentos do edital). Tente novamente mais tarde.'
+      : err instanceof Error
+        ? err.message
+        : String(err)
     await prisma.tenderAnalysis.update({
       where: { tenderId },
       data: { status: 'FAILED', errorMsg },
