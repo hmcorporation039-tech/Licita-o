@@ -139,7 +139,7 @@ export default function AdminUsuariosPage() {
         <button
           type="submit"
           disabled={creating}
-          className="rounded bg-blue-700 px-3 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-50 sm:col-span-2"
+          className="rounded bg-indigo-700 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-800 disabled:opacity-50 sm:col-span-2"
         >
           {creating ? 'Criando...' : 'Criar usuário'}
         </button>
@@ -153,7 +153,7 @@ export default function AdminUsuariosPage() {
             <li key={u.id} className="flex flex-wrap items-center justify-between gap-3 rounded border border-slate-200 bg-white p-3">
               <div>
                 <p className="text-sm font-medium">
-                  {u.email} {u.isAdmin && <span className="text-xs text-blue-700">(admin)</span>}
+                  {u.email} {u.isAdmin && <span className="text-xs text-indigo-700">(admin)</span>}
                   {!u.active && <span className="ml-1 text-xs text-red-600">(desativado)</span>}
                 </p>
                 <p className="text-xs text-slate-500">
@@ -163,7 +163,7 @@ export default function AdminUsuariosPage() {
                 </p>
               </div>
               <div className="flex gap-3 text-sm">
-                <button onClick={() => extend(u, 30)} className="text-blue-700 hover:underline">
+                <button onClick={() => extend(u, 30)} className="text-indigo-700 hover:underline">
                   +30 dias
                 </button>
                 <button onClick={() => extend(u, null)} className="text-slate-600 hover:underline">

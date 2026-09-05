@@ -286,13 +286,13 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
               onClick={() => setActiveTab(tab.id)}
               className={`whitespace-nowrap rounded px-3 py-2 text-left text-sm font-medium transition ${
                 activeTab === tab.id
-                  ? 'bg-blue-700 text-white'
+                  ? 'bg-indigo-700 text-white'
                   : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
               }`}
             >
               {tab.label}
               {tab.id === 'checklist' && (
-                <span className={activeTab === tab.id ? 'ml-1 text-blue-100' : 'ml-1 text-slate-400'}>
+                <span className={activeTab === tab.id ? 'ml-1 text-indigo-100' : 'ml-1 text-slate-400'}>
                   ({done}/{total})
                 </span>
               )}
@@ -326,7 +326,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                 <a
                   href={tender.linkEdital}
                   target="_blank"
-                  className="mt-4 inline-block text-sm text-blue-700 hover:underline"
+                  className="mt-4 inline-block text-sm text-indigo-700 hover:underline"
                 >
                   Ver edital original
                 </a>
@@ -389,7 +389,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                   <button
                     onClick={() => runAnalysis(true)}
                     disabled={analyzing}
-                    className="text-sm text-blue-700 hover:underline disabled:opacity-50"
+                    className="text-sm text-indigo-700 hover:underline disabled:opacity-50"
                   >
                     Reanalisar
                   </button>
@@ -404,7 +404,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                   </p>
                   <button
                     onClick={() => runAnalysis(false)}
-                    className="rounded bg-blue-700 px-3 py-2 text-sm font-medium text-white hover:bg-blue-800"
+                    className="rounded bg-indigo-700 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-800"
                   >
                     Analisar edital com IA
                   </button>
@@ -422,7 +422,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                   <p className="mb-3 text-sm text-red-600">{analysis.errorMsg ?? 'A análise falhou.'}</p>
                   <button
                     onClick={() => runAnalysis(true)}
-                    className="rounded bg-blue-700 px-3 py-2 text-sm font-medium text-white hover:bg-blue-800"
+                    className="rounded bg-indigo-700 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-800"
                   >
                     Tentar novamente
                   </button>
@@ -481,7 +481,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                             <span>{doc}</span>
                             <button
                               onClick={() => addChecklistItem(doc)}
-                              className="text-xs text-blue-700 hover:underline"
+                              className="text-xs text-indigo-700 hover:underline"
                             >
                               + adicionar ao checklist
                             </button>
@@ -571,7 +571,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                   onChange={(e) => setNewItemLabel(e.target.value)}
                   className="flex-1 rounded border border-slate-300 px-3 py-2 text-sm"
                 />
-                <button type="submit" className="rounded bg-blue-700 px-3 py-2 text-sm font-medium text-white hover:bg-blue-800">
+                <button type="submit" className="rounded bg-indigo-700 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-800">
                   Adicionar
                 </button>
               </form>
@@ -644,7 +644,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                       onChange={(e) => setNewMilestoneDate(e.target.value)}
                       className="rounded border border-slate-300 px-3 py-2 text-sm"
                     />
-                    <button type="submit" className="rounded bg-blue-700 px-3 py-2 text-sm font-medium text-white hover:bg-blue-800">
+                    <button type="submit" className="rounded bg-indigo-700 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-800">
                       Adicionar
                     </button>
                   </form>

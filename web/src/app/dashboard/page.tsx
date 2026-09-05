@@ -12,7 +12,7 @@ function formatData(v: string) {
 
 function StatCard({ label, value, href }: { label: string; value: number; href: string }) {
   return (
-    <Link href={href} className="rounded border border-slate-200 bg-white p-4 hover:border-blue-300">
+    <Link href={href} className="rounded border border-slate-200 bg-white p-4 hover:border-indigo-300">
       <p className="text-2xl font-semibold text-slate-900">{value}</p>
       <p className="text-sm text-slate-500">{label}</p>
     </Link>
@@ -63,7 +63,7 @@ export default function DashboardPage() {
                   <li key={i} className="flex items-center justify-between gap-3 rounded border border-slate-100 p-2 text-sm">
                     <div>
                       <p className="font-medium text-slate-800">{p.label}</p>
-                      <Link href={`/tenders/${p.tenderId}`} className="text-slate-500 hover:text-blue-700 hover:underline">
+                      <Link href={`/tenders/${p.tenderId}`} className="text-slate-500 hover:text-indigo-700 hover:underline">
                         {p.tenderObjeto}
                       </Link>
                     </div>
@@ -88,7 +88,7 @@ export default function DashboardPage() {
                 ))}
               </ul>
             )}
-            <Link href="/documentos" className="mt-3 inline-block text-sm text-blue-700 hover:underline">
+            <Link href="/documentos" className="mt-3 inline-block text-sm text-indigo-700 hover:underline">
               Ver cofre de documentos
             </Link>
           </section>
@@ -102,14 +102,14 @@ export default function DashboardPage() {
                 {data.ultimosMatches.map((m) => (
                   <li key={m.id} className="rounded border border-slate-100 p-2 text-sm">
                     <p className="text-xs text-slate-500">Item: {m.monitoredItem.name}</p>
-                    <Link href={`/tenders/${m.tenderId}`} className="text-blue-700 hover:underline">
+                    <Link href={`/tenders/${m.tenderId}`} className="text-indigo-700 hover:underline">
                       {m.tender.objetoResumido ?? m.tender.objeto}
                     </Link>
                   </li>
                 ))}
               </ul>
             )}
-            <Link href="/matches" className="mt-3 inline-block text-sm text-blue-700 hover:underline">
+            <Link href="/matches" className="mt-3 inline-block text-sm text-indigo-700 hover:underline">
               Ver todos os matches
             </Link>
           </section>

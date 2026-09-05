@@ -41,7 +41,7 @@ export default function Nav() {
               href={link.href}
               className={
                 pathname?.startsWith(link.href)
-                  ? 'font-medium text-blue-700'
+                  ? 'font-medium text-indigo-700'
                   : 'text-slate-600 hover:text-slate-900'
               }
             >
@@ -50,7 +50,7 @@ export default function Nav() {
           ))}
           {user && (
             <span className="ml-2 flex items-center gap-2 border-l border-slate-200 pl-4 text-slate-500">
-              <Link href="/conta" className="hover:text-blue-700 hover:underline">
+              <Link href="/conta" className="hover:text-indigo-700 hover:underline">
                 {user.email}
               </Link>
               <button

@@ -287,7 +287,7 @@ export default function ItemsPage() {
           <button
             type="submit"
             disabled={creating}
-            className="rounded bg-blue-700 px-3 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-50 sm:col-span-2"
+            className="rounded bg-indigo-700 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-800 disabled:opacity-50 sm:col-span-2"
           >
             {creating ? 'Criando...' : 'Cadastrar item'}
           </button>
@@ -301,7 +301,7 @@ export default function ItemsPage() {
           <ul className="flex flex-col gap-3">
             {items.map((item) =>
               editingId === item.id ? (
-                <li key={item.id} className="rounded border border-blue-300 bg-blue-50 p-4">
+                <li key={item.id} className="rounded border border-indigo-300 bg-indigo-50 p-4">
                   <div className="grid gap-2 sm:grid-cols-2">
                     <input
                       placeholder="Nome do item"
@@ -384,7 +384,7 @@ export default function ItemsPage() {
                     <button
                       onClick={() => handleSaveEdit(item.id)}
                       disabled={editSaving}
-                      className="rounded bg-blue-700 px-3 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-50"
+                      className="rounded bg-indigo-700 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-800 disabled:opacity-50"
                     >
                       {editSaving ? 'Salvando...' : 'Salvar alterações'}
                     </button>
@@ -432,7 +432,7 @@ export default function ItemsPage() {
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1 text-sm">
                       <div className="flex gap-3">
-                        <button onClick={() => handleRematch(item.id)} className="text-blue-700 hover:underline">
+                        <button onClick={() => handleRematch(item.id)} className="text-indigo-700 hover:underline">
                           Buscar agora
                         </button>
                         <button onClick={() => startEdit(item)} className="text-slate-600 hover:underline">
@@ -456,7 +456,7 @@ export default function ItemsPage() {
       </section>
 
       <p className="text-sm text-slate-500">
-        Quer ver o que já chegou? Vá para <Link href="/matches" className="text-blue-700 hover:underline">Meus matches</Link>.
+        Quer ver o que já chegou? Vá para <Link href="/matches" className="text-indigo-700 hover:underline">Meus matches</Link>.
       </p>
     </div>
   )

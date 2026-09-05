@@ -95,11 +95,11 @@ export default function MatchesPage() {
       ) : (
         <ul className="flex flex-col gap-3">
           {data?.items.map((m) => (
-            <li key={m.id} className={`rounded border p-4 ${m.read ? 'border-slate-200 bg-white' : 'border-blue-300 bg-blue-50'}`}>
+            <li key={m.id} className={`rounded border p-4 ${m.read ? 'border-slate-200 bg-white' : 'border-indigo-300 bg-indigo-50'}`}>
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs text-slate-500">Item: {m.monitoredItem.name}</p>
-                  <Link href={`/tenders/${m.tenderId}`} className="font-medium text-blue-700 hover:underline">
+                  <Link href={`/tenders/${m.tenderId}`} className="font-medium text-indigo-700 hover:underline">
                     {m.tender.objetoResumido ?? m.tender.objeto}
                   </Link>
                   <p className="mt-1 text-sm text-slate-500">
@@ -116,7 +116,7 @@ export default function MatchesPage() {
                       ★ Marcar como interessado
                     </button>
                     {!m.read && (
-                      <button onClick={() => markAsRead(m.id)} className="text-blue-700 hover:underline">
+                      <button onClick={() => markAsRead(m.id)} className="text-indigo-700 hover:underline">
                         Marcar como lido
                       </button>
                     )}

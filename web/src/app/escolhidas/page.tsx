@@ -57,7 +57,7 @@ export default function EscolhidasPage() {
             <li key={p.id} className="rounded border border-slate-200 bg-white p-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <Link href={`/tenders/${p.tenderId}`} className="font-medium text-blue-700 hover:underline">
+                  <Link href={`/tenders/${p.tenderId}`} className="font-medium text-indigo-700 hover:underline">
                     {p.tender.objetoResumido ?? p.tender.objeto}
                   </Link>
                   <p className="mt-1 text-sm text-slate-500">

@@ -115,7 +115,7 @@ export default function GuiaPage() {
         <h1 className="text-xl font-semibold">Guia prático</h1>
         <p className="mt-1 text-sm text-slate-500">
           Baseado no checklist de documentação para licitações públicas (Lei nº 14.133/2021). Consulte o
-          checklist interativo dentro de cada <Link href="/tenders" className="text-blue-700 hover:underline">licitação</Link>.
+          checklist interativo dentro de cada <Link href="/tenders" className="text-indigo-700 hover:underline">licitação</Link>.
         </p>
       </section>
 
@@ -155,7 +155,7 @@ export default function GuiaPage() {
             <div key={p.nome} className="rounded border border-slate-200 bg-white p-4">
               <div className="flex items-baseline justify-between gap-2">
                 <p className="font-medium">{p.nome}</p>
-                <a href={p.site} target="_blank" className="text-sm text-blue-700 hover:underline">
+                <a href={p.site} target="_blank" className="text-sm text-indigo-700 hover:underline">
                   {p.site.replace('https://', '')}
                 </a>
               </div>

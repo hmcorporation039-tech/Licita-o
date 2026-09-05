@@ -26,7 +26,7 @@ const CLASSIFICACAO_LABEL: Record<string, string> = {
 
 const CLASSIFICACAO_CLASS: Record<string, string> = {
   exata: 'bg-emerald-100 text-emerald-800',
-  alta: 'bg-blue-100 text-blue-800',
+  alta: 'bg-indigo-100 text-indigo-800',
   media: 'bg-amber-100 text-amber-800',
 }
 
@@ -161,7 +161,7 @@ export default function TendersPage() {
         <button
           type="button"
           onClick={() => setAdvancedOpen((v) => !v)}
-          className="mt-3 text-xs font-medium text-blue-700 hover:underline"
+          className="mt-3 text-xs font-medium text-indigo-700 hover:underline"
         >
           {advancedOpen ? 'Ocultar busca avançada' : 'Busca avançada'}
         </button>
@@ -282,7 +282,7 @@ export default function TendersPage() {
                 {data?.items.map((t) => (
                   <tr key={t.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                     <td className="px-3 py-2">
-                      <Link href={`/tenders/${t.id}`} className="font-medium text-blue-700 hover:underline">
+                      <Link href={`/tenders/${t.id}`} className="font-medium text-indigo-700 hover:underline">
                         {t.orgao ?? 'Órgão n/d'}
                       </Link>
                       <p className="mt-0.5 max-w-md truncate text-xs text-slate-500" title={t.objetoResumido ?? t.objeto}>
