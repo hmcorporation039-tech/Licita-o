@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRequireSession } from '@/hooks/useRequireSession'
 import { api } from '@/lib/api'
@@ -30,6 +30,43 @@ const CLASSIFICACAO_CLASS: Record<string, string> = {
   media: 'bg-amber-100 text-amber-800',
 }
 
+function TenderRow({ t, somenteRelacionadas }: { t: Tender; somenteRelacionadas: boolean }) {
+  return (
+    <tr className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+      <td className="px-3 py-2">
+        <Link href={`/tenders/${t.id}`} className="font-medium text-indigo-700 hover:underline">
+          {t.orgao ?? 'Órgão n/d'}
+        </Link>
+        <p className="mt-0.5 max-w-md truncate text-xs text-slate-500" title={t.objetoResumido ?? t.objeto}>
+          {t.objetoResumido ?? t.objeto}
+        </p>
+      </td>
+      <td className="px-3 py-2 text-slate-600">{t.numeroControle ?? '—'}</td>
+      <td className="px-3 py-2 text-slate-600">
+        {MODALIDADE_OPTIONS.find((o) => o.value === t.modalidade)?.label ?? t.modalidade}
+      </td>
+      <td className="px-3 py-2 text-slate-600">{t.municipio ? `${t.municipio}/${t.uf ?? ''}` : t.uf ?? 'n/d'}</td>
+      <td className="px-3 py-2 text-slate-600">
+        {SITUACAO_OPTIONS.find((o) => o.value === t.situacao)?.label ?? t.situacao}
+      </td>
+      <td className="px-3 py-2 text-slate-600">{formatData(t.publicadoAt)}</td>
+      <td className="px-3 py-2 text-slate-600">{formatValor(t.valorEstimado)}</td>
+      {somenteRelacionadas && (
+        <td className="px-3 py-2">
+          {t.match && (
+            <span
+              className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${CLASSIFICACAO_CLASS[t.match.classificacao]}`}
+              title={t.match.itensRelacionados.join(', ')}
+            >
+              {CLASSIFICACAO_LABEL[t.match.classificacao]}
+            </span>
+          )}
+        </td>
+      )}
+    </tr>
+  )
+}
+
 export default function TendersPage() {
   const user = useRequireSession()
   const [data, setData] = useState<Paginated<Tender> | null>(null)
@@ -47,6 +84,10 @@ export default function TendersPage() {
   const [publicacaoFim, setPublicacaoFim] = useState('')
   const [q, setQ] = useState('')
   const [somenteRelacionadas, setSomenteRelacionadas] = useState(true)
+  // Organiza o resultado por Estado e depois por Órgão/Prefeitura, em vez
+  // do feed cronológico — é o modo padrão porque foi o pedido original;
+  // pageSize maior aqui pra grupos não ficarem cortados a cada 20 linhas.
+  const [agrupar, setAgrupar] = useState(true)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [page, setPage] = useState(1)
 
@@ -54,7 +95,7 @@ export default function TendersPage() {
     if (!user) return
     setLoading(true)
     const timeout = setTimeout(() => {
-      const qs = new URLSearchParams({ page: String(page), pageSize: '20' })
+      const qs = new URLSearchParams({ page: String(page), pageSize: agrupar ? '100' : '20' })
       if (orgao) qs.set('orgao', orgao)
       if (numero) qs.set('numero', numero)
       if (modalidade) qs.set('modalidade', modalidade)
@@ -65,13 +106,34 @@ export default function TendersPage() {
       if (publicacaoFim) qs.set('publicacaoFim', publicacaoFim)
       if (q) qs.set('q', q)
       if (somenteRelacionadas) qs.set('somenteRelacionadas', 'true')
+      if (agrupar) qs.set('agrupar', 'true')
       api
         .get<Paginated<Tender>>(`/api/tenders?${qs.toString()}`)
         .then(setData)
         .finally(() => setLoading(false))
     }, 300)
     return () => clearTimeout(timeout)
-  }, [user, orgao, numero, modalidade, situacao, municipio, uf, publicacaoInicio, publicacaoFim, q, somenteRelacionadas, page])
+  }, [user, orgao, numero, modalidade, situacao, municipio, uf, publicacaoInicio, publicacaoFim, q, somenteRelacionadas, agrupar, page])
+
+  // Agrupa a lista já ordenada (uf → órgão) vinda do backend em UF > Órgão >
+  // licitações, pra render em seções em vez de uma tabela só.
+  const grupos = (() => {
+    if (!agrupar || !data) return null
+    const porUf = new Map<string, Map<string, Tender[]>>()
+    for (const t of data.items) {
+      const ufKey = t.uf ?? 'UF não informada'
+      const orgaoKey = t.orgao ?? 'Órgão não informado'
+      if (!porUf.has(ufKey)) porUf.set(ufKey, new Map())
+      const porOrgao = porUf.get(ufKey)!
+      if (!porOrgao.has(orgaoKey)) porOrgao.set(orgaoKey, [])
+      porOrgao.get(orgaoKey)!.push(t)
+    }
+    return Array.from(porUf.entries()).map(([uf, porOrgao]) => ({
+      uf,
+      total: Array.from(porOrgao.values()).reduce((n, arr) => n + arr.length, 0),
+      orgaos: Array.from(porOrgao.entries()).map(([orgao, tenders]) => ({ orgao, tenders })),
+    }))
+  })()
 
   function clearFilters() {
     setPage(1)
@@ -230,17 +292,30 @@ export default function TendersPage() {
         )}
 
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            <input
-              type="checkbox"
-              checked={somenteRelacionadas}
-              onChange={(e) => {
-                setPage(1)
-                setSomenteRelacionadas(e.target.checked)
-              }}
-            />
-            Só relacionadas aos meus itens monitorados
-          </label>
+          <div className="flex flex-wrap items-center gap-4">
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={somenteRelacionadas}
+                onChange={(e) => {
+                  setPage(1)
+                  setSomenteRelacionadas(e.target.checked)
+                }}
+              />
+              Só relacionadas aos meus itens monitorados
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={agrupar}
+                onChange={(e) => {
+                  setPage(1)
+                  setAgrupar(e.target.checked)
+                }}
+              />
+              Agrupar por Estado e Órgão
+            </label>
+          </div>
           <div className="flex items-center gap-3">
             {data && <span className="text-sm text-slate-500">{data.total} licitação(ões) encontrada(s)</span>}
             <button
@@ -279,42 +354,37 @@ export default function TendersPage() {
                 </tr>
               </thead>
               <tbody>
-                {data?.items.map((t) => (
-                  <tr key={t.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                    <td className="px-3 py-2">
-                      <Link href={`/tenders/${t.id}`} className="font-medium text-indigo-700 hover:underline">
-                        {t.orgao ?? 'Órgão n/d'}
-                      </Link>
-                      <p className="mt-0.5 max-w-md truncate text-xs text-slate-500" title={t.objetoResumido ?? t.objeto}>
-                        {t.objetoResumido ?? t.objeto}
-                      </p>
-                    </td>
-                    <td className="px-3 py-2 text-slate-600">{t.numeroControle ?? '—'}</td>
-                    <td className="px-3 py-2 text-slate-600">
-                      {MODALIDADE_OPTIONS.find((o) => o.value === t.modalidade)?.label ?? t.modalidade}
-                    </td>
-                    <td className="px-3 py-2 text-slate-600">
-                      {t.municipio ? `${t.municipio}/${t.uf ?? ''}` : t.uf ?? 'n/d'}
-                    </td>
-                    <td className="px-3 py-2 text-slate-600">
-                      {SITUACAO_OPTIONS.find((o) => o.value === t.situacao)?.label ?? t.situacao}
-                    </td>
-                    <td className="px-3 py-2 text-slate-600">{formatData(t.publicadoAt)}</td>
-                    <td className="px-3 py-2 text-slate-600">{formatValor(t.valorEstimado)}</td>
-                    {somenteRelacionadas && (
-                      <td className="px-3 py-2">
-                        {t.match && (
-                          <span
-                            className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${CLASSIFICACAO_CLASS[t.match.classificacao]}`}
-                            title={t.match.itensRelacionados.join(', ')}
+                {grupos
+                  ? grupos.map((g) => (
+                      <Fragment key={`uf-${g.uf}`}>
+                        <tr className="bg-slate-100">
+                          <td
+                            colSpan={somenteRelacionadas ? 8 : 7}
+                            className="px-3 py-1.5 text-sm font-semibold text-slate-700"
                           >
-                            {CLASSIFICACAO_LABEL[t.match.classificacao]}
-                          </span>
-                        )}
-                      </td>
-                    )}
-                  </tr>
-                ))}
+                            {g.uf} <span className="font-normal text-slate-500">— {g.total} licitação(ões)</span>
+                          </td>
+                        </tr>
+                        {g.orgaos.map((og) => (
+                          <Fragment key={`orgao-${g.uf}-${og.orgao}`}>
+                            <tr className="bg-slate-50">
+                              <td
+                                colSpan={somenteRelacionadas ? 8 : 7}
+                                className="px-3 py-1 pl-6 text-xs font-medium uppercase tracking-wide text-slate-500"
+                              >
+                                {og.orgao} <span className="normal-case text-slate-400">({og.tenders.length})</span>
+                              </td>
+                            </tr>
+                            {og.tenders.map((t) => (
+                              <TenderRow key={t.id} t={t} somenteRelacionadas={somenteRelacionadas} />
+                            ))}
+                          </Fragment>
+                        ))}
+                      </Fragment>
+                    ))
+                  : data?.items.map((t) => (
+                      <TenderRow key={t.id} t={t} somenteRelacionadas={somenteRelacionadas} />
+                    ))}
               </tbody>
             </table>
           </div>

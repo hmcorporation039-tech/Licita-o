@@ -35,6 +35,14 @@ const querySchema = z.object({
     .enum(['true', 'false'])
     .optional()
     .transform((v) => v === 'true'),
+  // Agrupa visualmente por Estado e depois por Órgão/Prefeitura, em vez do
+  // feed cronológico padrão — muda só a ordenação; o agrupamento em si
+  // (inserir os cabeçalhos de UF/Órgão) é feito no front, olhando pra
+  // sequência já vindo ordenada assim.
+  agrupar: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => v === 'true'),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(20),
 })
@@ -53,6 +61,7 @@ tendersRouter.get(
       publicacaoFim,
       q,
       somenteRelacionadas,
+      agrupar,
       page,
       pageSize,
     } = querySchema.parse(req.query)
@@ -86,7 +95,9 @@ tendersRouter.get(
     const [rows, total] = await Promise.all([
       prisma.tender.findMany({
         where,
-        orderBy: { publicadoAt: 'desc' },
+        orderBy: agrupar
+          ? [{ uf: 'asc' }, { orgao: 'asc' }, { publicadoAt: 'desc' }]
+          : { publicadoAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
         include: userId
