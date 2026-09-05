@@ -30,7 +30,7 @@ export default function Nav() {
 
   return (
     <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
         <Link href="/dashboard" className="font-semibold text-slate-900">
           Monitor de Licitações
         </Link>
