@@ -36,7 +36,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       clearSessionUser()
       window.location.href = '/login'
     }
-    throw new ApiRequestError(res.status, body.error ?? `Erro ${res.status}`)
+    const detail =
+      Array.isArray(body.details) && body.details.length > 0
+        ? ' (' + body.details.map((d: { path?: unknown[]; message?: string }) => `${(d.path ?? []).join('.')}: ${d.message}`).join('; ') + ')'
+        : ''
+    throw new ApiRequestError(res.status, (body.error ?? `Erro ${res.status}`) + detail)
   }
 
   return body as T

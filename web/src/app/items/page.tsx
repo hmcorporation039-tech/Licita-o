@@ -226,7 +226,7 @@ export default function ItemsPage() {
             className="rounded border border-slate-300 px-3 py-2 text-sm"
           />
           <input
-            placeholder="UFs, separadas por vírgula (vazio = nacional)"
+            placeholder="UFs — siglas de 2 letras separadas por vírgula, ex: DF, SP (vazio = nacional)"
             value={ufs}
             onChange={(e) => setUfs(e.target.value)}
             className="rounded border border-slate-300 px-3 py-2 text-sm"
@@ -328,7 +328,7 @@ export default function ItemsPage() {
                       className="rounded border border-slate-300 px-3 py-2 text-sm"
                     />
                     <input
-                      placeholder="UFs, separadas por vírgula (vazio = nacional)"
+                      placeholder="UFs — siglas de 2 letras separadas por vírgula, ex: DF, SP (vazio = nacional)"
                       value={editUfs}
                       onChange={(e) => setEditUfs(e.target.value)}
                       className="rounded border border-slate-300 px-3 py-2 text-sm"
