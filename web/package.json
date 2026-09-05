@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@svg-maps/brazil": "^2.0.0",
     "next": "16.3.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"

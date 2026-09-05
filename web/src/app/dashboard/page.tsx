@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRequireSession } from '@/hooks/useRequireSession'
 import { api } from '@/lib/api'
 import { DashboardData } from '@/lib/types'
+import BrazilMap, { EstadoMapa } from '@/components/BrazilMap'
 
 function formatData(v: string) {
   return new Date(v).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -23,6 +24,7 @@ export default function DashboardPage() {
   const user = useRequireSession()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [estadosMapa, setEstadosMapa] = useState<EstadoMapa[]>([])
 
   useEffect(() => {
     if (!user) return
@@ -30,6 +32,10 @@ export default function DashboardPage() {
       .get<DashboardData>('/api/dashboard')
       .then(setData)
       .finally(() => setLoading(false))
+    api
+      .get<{ estados: EstadoMapa[] }>('/api/dashboard/mapa')
+      .then((r) => setEstadosMapa(r.estados))
+      .catch(() => setEstadosMapa([]))
   }, [user])
 
   if (!user) return null
@@ -50,6 +56,11 @@ export default function DashboardPage() {
             <StatCard label="Matches não lidos" value={data.matchesNaoLidos} href="/matches" />
             <StatCard label="Matches no total" value={data.matchesTotal} href="/matches" />
           </div>
+
+          <section className="rounded border border-slate-200 bg-white p-4">
+            <h2 className="mb-3 text-lg font-semibold">Licitações escolhidas pelo Brasil</h2>
+            <BrazilMap estados={estadosMapa} />
+          </section>
 
           <section className="rounded border border-slate-200 bg-white p-4">
             <h2 className="mb-3 text-lg font-semibold">Próximos prazos</h2>

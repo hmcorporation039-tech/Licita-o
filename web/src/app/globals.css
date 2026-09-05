@@ -37,3 +37,18 @@ body {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
+
+/* Sinalização "piscando" no mapa do Brasil (dashboard) — estados com
+   licitação escolhida urgente (vermelho) ou recém-selecionada (verde). */
+@keyframes map-blink {
+  0%,
+  100% {
+    fill-opacity: 1;
+  }
+  50% {
+    fill-opacity: 0.35;
+  }
+}
+.map-blink {
+  animation: map-blink 1.3s ease-in-out infinite;
+}

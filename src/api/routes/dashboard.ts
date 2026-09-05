@@ -79,3 +79,78 @@ dashboardRouter.get(
     })
   })
 )
+
+// Janelas usadas pra classificar a urgência de cada licitação escolhida no
+// mapa — mesma lógica de "farol": vermelho pisca quando tá muito em cima da
+// hora, amarelo quando ainda dá tempo mas já é prá se organizar, verde
+// quando foi escolhida mas o prazo tá tranquilo (ou não tem data definida).
+const MAPA_URGENTE_DIAS = 3
+const MAPA_ANDAMENTO_DIAS = 15
+
+dashboardRouter.get(
+  '/mapa',
+  asyncHandler(async (req, res) => {
+    const userId = req.userId!
+
+    const escolhidas = await prisma.tenderParticipationPlan.findMany({
+      where: { userId, status: 'VOU_PARTICIPAR' },
+      include: {
+        tender: {
+          select: {
+            id: true,
+            uf: true,
+            municipio: true,
+            orgao: true,
+            objeto: true,
+            objetoResumido: true,
+            encerramentoAt: true,
+            situacao: true,
+          },
+        },
+      },
+    })
+
+    const now = Date.now()
+    const DIA_MS = 24 * 60 * 60 * 1000
+
+    type Urgencia = 'urgente' | 'andamento' | 'selecionada'
+    const PRIORIDADE: Record<Urgencia, number> = { urgente: 3, andamento: 2, selecionada: 1 }
+
+    const porUf = new Map<
+      string,
+      { uf: string; tenders: { id: string; municipio: string | null; orgao: string | null; objeto: string; diasRestantes: number | null; urgencia: Urgencia }[] }
+    >()
+
+    for (const plano of escolhidas) {
+      const t = plano.tender
+      if (!t.uf) continue // sem UF não dá pra sinalizar no mapa
+
+      const diasRestantes = t.encerramentoAt ? Math.ceil((t.encerramentoAt.getTime() - now) / DIA_MS) : null
+
+      let urgencia: Urgencia = 'selecionada'
+      if (diasRestantes !== null && diasRestantes <= MAPA_URGENTE_DIAS) urgencia = 'urgente'
+      else if (diasRestantes !== null && diasRestantes <= MAPA_ANDAMENTO_DIAS) urgencia = 'andamento'
+
+      const uf = t.uf.toUpperCase()
+      if (!porUf.has(uf)) porUf.set(uf, { uf, tenders: [] })
+      porUf.get(uf)!.tenders.push({
+        id: t.id,
+        municipio: t.municipio,
+        orgao: t.orgao,
+        objeto: t.objetoResumido ?? t.objeto,
+        diasRestantes,
+        urgencia,
+      })
+    }
+
+    const estados = Array.from(porUf.values()).map((g) => ({
+      ...g,
+      urgenciaPrioritaria: g.tenders.reduce<Urgencia>(
+        (max, t) => (PRIORIDADE[t.urgencia] > PRIORIDADE[max] ? t.urgencia : max),
+        'selecionada'
+      ),
+    }))
+
+    res.json({ estados })
+  })
+)
