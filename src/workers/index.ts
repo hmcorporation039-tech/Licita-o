@@ -24,29 +24,38 @@ async function main() {
 
   console.log('✅ Workers ativos: PNCP, ComprasNet, Matcher, Notificador')
 
-  // Agenda coletas periódicas
-  await scheduleColetorJobs()
+  // Agenda coletas periódicas — envolvido em try/catch de propósito: isso
+  // roda toda vez que o processo sobe, então se o Redis estiver indisponível
+  // (ex: cota do plano gratuito do Upstash estourada), uma falha aqui não
+  // pode derrubar o processo inteiro (senão o Railway reinicia, bate na
+  // mesma falha de novo, e entra em crash-loop — foi exatamente isso que
+  // aconteceu e inundou os logs do serviço).
+  try {
+    await scheduleColetorJobs()
 
-  // Dispara uma coleta imediata ao iniciar (backfill dos últimos 2 dias)
-  const { coletorPNCPQueue, coletorComprasnetQueue } = await import('../queues')
-  const today = new Date()
-  const twoDaysAgo = new Date()
-  twoDaysAgo.setDate(twoDaysAgo.getDate() - 2)
-  const fmt = (d: Date) => d.toISOString().split('T')[0]
+    // Dispara uma coleta imediata ao iniciar (backfill dos últimos 2 dias)
+    const { coletorPNCPQueue, coletorComprasnetQueue } = await import('../queues')
+    const today = new Date()
+    const twoDaysAgo = new Date()
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2)
+    const fmt = (d: Date) => d.toISOString().split('T')[0]
 
-  await coletorPNCPQueue.add('coleta-pncp-inicial', {
-    fonte: 'PNCP',
-    dataInicial: fmt(twoDaysAgo),
-    dataFinal: fmt(today),
-  })
+    await coletorPNCPQueue.add('coleta-pncp-inicial', {
+      fonte: 'PNCP',
+      dataInicial: fmt(twoDaysAgo),
+      dataFinal: fmt(today),
+    })
 
-  await coletorComprasnetQueue.add('coleta-comprasnet-inicial', {
-    fonte: 'COMPRASNET',
-    dataInicial: fmt(twoDaysAgo),
-    dataFinal: fmt(today),
-  })
+    await coletorComprasnetQueue.add('coleta-comprasnet-inicial', {
+      fonte: 'COMPRASNET',
+      dataInicial: fmt(twoDaysAgo),
+      dataFinal: fmt(today),
+    })
 
-  console.log('📥 Coleta inicial disparada (últimos 2 dias).')
+    console.log('📥 Coleta inicial disparada (últimos 2 dias).')
+  } catch (err) {
+    console.error('[Startup] Erro ao agendar jobs de coleta (Redis indisponível?) — workers seguem no ar:', err)
+  }
 
   // Reconsulta a situação real das licitações do PNCP periodicamente — a
   // coleta só grava o status no momento da publicação e nunca mais. Não usa
