@@ -267,7 +267,7 @@ tendersRouter.post(
   })
 )
 
-const PARTICIPATION_STATUS_VALUES = ['AVALIANDO', 'VOU_PARTICIPAR', 'NAO_VOU_PARTICIPAR', 'PARTICIPEI'] as const
+export const PARTICIPATION_STATUS_VALUES = ['AVALIANDO', 'VOU_PARTICIPAR', 'NAO_VOU_PARTICIPAR', 'PARTICIPEI'] as const
 
 interface PlanState {
   doneIds: string[]
@@ -348,6 +348,37 @@ tendersRouter.put(
     await prisma.tenderParticipationPlan.upsert({
       where: { userId_tenderId: { userId, tenderId: req.params.id } },
       update: { status, state: state as unknown as object },
+      create: { userId, tenderId: req.params.id, status, state: state as unknown as object },
+    })
+
+    res.json(await buildPlanResponse(req.params.id, status, state))
+  })
+)
+
+const putPlanoStatusSchema = z.object({ status: z.enum(PARTICIPATION_STATUS_VALUES) })
+
+// Troca só o status de decisão (ex: "marcar como interessado" a partir da
+// lista de matches), sem precisar reenviar a lista inteira de marcos —
+// diferente do PUT completo acima, não corre o risco de apagar progresso
+// já salvo (itens marcados, marcos customizados) por causa de um corpo
+// enviado sem eles.
+tendersRouter.patch(
+  '/:id/plano/status',
+  asyncHandler(async (req, res) => {
+    const { status } = putPlanoStatusSchema.parse(req.body)
+    const userId = req.userId!
+
+    const tender = await prisma.tender.findUnique({ where: { id: req.params.id }, select: { id: true } })
+    if (!tender) throw new ApiError(404, 'Licitação não encontrada')
+
+    const existing = await prisma.tenderParticipationPlan.findUnique({
+      where: { userId_tenderId: { userId, tenderId: req.params.id } },
+    })
+    const state = (existing?.state as unknown as PlanState) ?? { doneIds: [], custom: [] }
+
+    await prisma.tenderParticipationPlan.upsert({
+      where: { userId_tenderId: { userId, tenderId: req.params.id } },
+      update: { status },
       create: { userId, tenderId: req.params.id, status, state: state as unknown as object },
     })
 

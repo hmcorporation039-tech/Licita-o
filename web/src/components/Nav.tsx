@@ -10,6 +10,7 @@ const LINKS = [
   { href: '/items', label: 'Itens monitorados' },
   { href: '/tenders', label: 'Licitações' },
   { href: '/matches', label: 'Meus matches' },
+  { href: '/escolhidas', label: 'Licitações escolhidas' },
   { href: '/documentos', label: 'Documentos da empresa' },
   { href: '/guia', label: 'Guia' },
 ]

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRequireSession } from '@/hooks/useRequireSession'
-import { api } from '@/lib/api'
+import { api, ApiRequestError } from '@/lib/api'
 import { Paginated, TenderMatch } from '@/lib/types'
 
 function formatValor(v: string | null) {
@@ -16,6 +16,7 @@ export default function MatchesPage() {
   const [data, setData] = useState<Paginated<TenderMatch> | null>(null)
   const [unreadOnly, setUnreadOnly] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [interesseMsg, setInteresseMsg] = useState<Record<string, string>>({})
 
   function load() {
     if (!user) return
@@ -34,6 +35,17 @@ export default function MatchesPage() {
     if (!user) return
     await api.patch(`/api/matches/${matchId}`, { read: true })
     load()
+  }
+
+  async function marcarInteresse(matchId: string, tenderId: string) {
+    if (!user) return
+    setInteresseMsg((m) => ({ ...m, [matchId]: 'Salvando...' }))
+    try {
+      await api.patch(`/api/tenders/${tenderId}/plano/status`, { status: 'VOU_PARTICIPAR' })
+      setInteresseMsg((m) => ({ ...m, [matchId]: '✓ Marcada em "Licitações escolhidas"' }))
+    } catch (err) {
+      setInteresseMsg((m) => ({ ...m, [matchId]: err instanceof ApiRequestError ? err.message : 'Erro' }))
+    }
   }
 
   if (!user) return null
@@ -73,11 +85,19 @@ export default function MatchesPage() {
                     <p className="mt-1 text-xs text-slate-400">Palavras: {m.matchedKeywords.join(', ')}</p>
                   )}
                 </div>
-                {!m.read && (
-                  <button onClick={() => markAsRead(m.id)} className="shrink-0 text-sm text-blue-700 hover:underline">
-                    Marcar como lido
-                  </button>
-                )}
+                <div className="flex shrink-0 flex-col items-end gap-1 text-sm">
+                  <div className="flex gap-3">
+                    <button onClick={() => marcarInteresse(m.id, m.tenderId)} className="text-emerald-700 hover:underline">
+                      ★ Marcar como interessado
+                    </button>
+                    {!m.read && (
+                      <button onClick={() => markAsRead(m.id)} className="text-blue-700 hover:underline">
+                        Marcar como lido
+                      </button>
+                    )}
+                  </div>
+                  {interesseMsg[m.id] && <p className="text-xs text-slate-500">{interesseMsg[m.id]}</p>}
+                </div>
               </div>
             </li>
           ))}

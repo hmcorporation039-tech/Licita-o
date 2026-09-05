@@ -210,8 +210,15 @@ monitoredItemsRouter.post(
       select: { id: true },
     })
 
+    // Enfileirar o e-mail é um efeito colateral, não o objetivo do rematch —
+    // se o Redis estiver indisponível (ex: cota do plano gratuito estourada),
+    // isso não pode derrubar a resposta com os matches que já foram achados.
     for (const match of created) {
-      await notificadorQueue.add('notify-match', { tenderMatchId: match.id })
+      try {
+        await notificadorQueue.add('notify-match', { tenderMatchId: match.id })
+      } catch (err) {
+        console.error('[Rematch] Erro ao enfileirar notificação (match salvo normalmente):', err)
+      }
     }
 
     res.json({ matchesFound: created.length })

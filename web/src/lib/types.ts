@@ -151,6 +151,14 @@ export interface ParticipationPlan {
   milestones: PlanMilestone[]
 }
 
+export interface ParticipationPlanListItem {
+  id: string
+  tenderId: string
+  status: ParticipationStatus
+  updatedAt: string
+  tender: Tender
+}
+
 export type AnalysisStatus = 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED' | 'NO_DOCUMENTS'
 
 export interface AnalysisRisco {

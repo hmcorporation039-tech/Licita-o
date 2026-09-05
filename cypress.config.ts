@@ -67,11 +67,12 @@ export default defineConfig({
     },
   },
   env: {
-    // Admin já seedado via `npx ts-node scripts/createAdmin.ts` — os testes
-    // logam como ele pra criar usuários de teste via /api/admin/users
-    // (não existe mais autocadastro aberto). Sobrescreva com
-    // CYPRESS_ADMIN_EMAIL/CYPRESS_ADMIN_PASSWORD se usar outra conta.
-    ADMIN_EMAIL: 'marciohector.06@gmail.com',
-    ADMIN_PASSWORD: '6ssXpSq9yhwsRY',
+    // Admin DEDICADO aos testes (não é a conta real do administrador —
+    // trocar a senha do admin de verdade não deveria nunca quebrar o
+    // suite, e vice-versa). Criado/renovado com:
+    //   npx ts-node scripts/createAdmin.ts cypress-admin@example.com CypressAdminFixo123 "Cypress Admin"
+    // Sobrescreva com CYPRESS_ADMIN_EMAIL/CYPRESS_ADMIN_PASSWORD se preferir outra conta.
+    ADMIN_EMAIL: 'cypress-admin@example.com',
+    ADMIN_PASSWORD: 'CypressAdminFixo123',
   },
 })

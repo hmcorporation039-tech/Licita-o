@@ -14,6 +14,7 @@ import { tendersRouter } from './routes/tenders'
 import { matchesRouter } from './routes/matches'
 import { companyDocumentsRouter } from './routes/companyDocuments'
 import { dashboardRouter } from './routes/dashboard'
+import { participationPlansRouter } from './routes/participationPlans'
 import { requireAuth } from './authMiddleware'
 import { ApiError } from './asyncHandler'
 
@@ -35,6 +36,7 @@ app.use('/api/tenders', requireAuth, tendersRouter)
 app.use('/api/matches', requireAuth, matchesRouter)
 app.use('/api/company-documents', requireAuth, companyDocumentsRouter)
 app.use('/api/dashboard', requireAuth, dashboardRouter)
+app.use('/api/participation-plans', requireAuth, participationPlansRouter)
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof ZodError) {
