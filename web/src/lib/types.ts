@@ -32,11 +32,20 @@ export interface MonitoredItem {
   valorMax: string | null
   modalidades: string[]
   orgaos: string[]
+  uasgCodes: string[]
   active: boolean
   raioKm: number | null
   origemMunicipio: string | null
   origemUf: string | null
   createdAt: string
+}
+
+export interface UasgResult {
+  codigoUasg: string
+  nomeUasg: string
+  nomeOrgao: string | null
+  siglaUf: string | null
+  municipioNome: string | null
 }
 
 export interface TenderItem {

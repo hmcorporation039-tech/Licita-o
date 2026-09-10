@@ -68,6 +68,11 @@ model MonitoredItem {
   // órgão específico, ou "PREFEITURA"/"UNIVERSIDADE FEDERAL" para uma categoria
   // inteira). Casamento literal por palavra, igual às keywords — ver matcherService.
   orgaos      String[]                      // vazio = qualquer órgão
+  // Filtro por código UASG (unidade compradora) — só existe no sistema legado
+  // (ComprasNet/Lei 8.666); licitações do PNCP não têm UASG, então esse
+  // filtro simplesmente não restringe candidatas do PNCP (ver uasgMatches em
+  // matcherService.ts). Preenchido via busca na tabela cacheada em Uasg.
+  uasgCodes   String[] @map("uasg_codes")   // vazio = qualquer unidade
   active      Boolean  @default(true)
 
   // Filtro por raio de distância — alternativa/complemento ao filtro por UF,
@@ -142,6 +147,33 @@ model Tender {
 enum FonteEnum {
   PNCP
   COMPRASNET
+}
+
+// ============================================================
+// TABELA DE UASGs (unidades compradoras) — cache local da API pública
+// dadosabertos.compras.gov.br/modulo-uasg, importado via
+// scripts/importUasg.ts. Usado pra: (1) autocompletar o filtro de Órgão
+// ao cadastrar item monitorado (nomeOrgao vale pras duas fontes) e
+// (2) filtro exato por código UASG (só bate com licitações do ComprasNet
+// — ver comentário em MonitoredItem.uasgCodes).
+// ============================================================
+model Uasg {
+  codigoUasg    String   @id @map("codigo_uasg")
+  nomeUasg      String   @map("nome_uasg")
+  nomeUasgNorm  String   @map("nome_uasg_norm")
+  siglaUf       String?  @map("sigla_uf") @db.Char(2)
+  municipioNome String?  @map("municipio_nome")
+  codigoOrgao   Int?     @map("codigo_orgao")
+  nomeOrgao     String?  @map("nome_orgao")
+  nomeOrgaoNorm String?  @map("nome_orgao_norm")
+  cnpjOrgao     String?  @map("cnpj_orgao")
+  ativo         Boolean  @default(true)
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([nomeUasgNorm])
+  @@index([nomeOrgaoNorm])
+  @@index([siglaUf])
+  @@map("uasgs")
 }
 
 enum ModalidadeEnum {

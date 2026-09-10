@@ -40,6 +40,9 @@ const createSchema = z.object({
   modalidades: z.array(z.enum(MODALIDADE_VALUES)).default([]),
   // Filtro por órgão — nome específico ou trecho (categoria, ex: "PREFEITURA")
   orgaos: z.array(z.string().min(1)).default([]),
+  // Filtro por código UASG — só bate com licitações do ComprasNet (ver
+  // uasgMatches em matcherService.ts). Selecionado via busca em /api/uasg/search.
+  uasgCodes: z.array(z.string().min(1)).default([]),
   // Filtro por raio de distância — alternativa ao filtro por UF
   raioKm: z.number().int().positive().nullable().optional(),
   origemMunicipio: z.string().min(1).nullable().optional(),
@@ -167,6 +170,7 @@ monitoredItemsRouter.post(
         ufs: item.ufs,
         modalidades: item.modalidades,
         orgaos: item.orgaos,
+        uasgCodes: item.uasgCodes,
         valorMin: item.valorMin ? Number(item.valorMin) : null,
         valorMax: item.valorMax ? Number(item.valorMax) : null,
         raioKm: item.raioKm,

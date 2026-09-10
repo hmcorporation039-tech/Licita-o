@@ -58,6 +58,17 @@ function orgaoMatches(orgaos: string[], tenderOrgao: string | null): boolean {
   })
 }
 
+// Filtro por código UASG (unidade compradora) — só existe no sistema legado
+// (ComprasNet/Lei 8.666). O PNCP (Lei 14.133) não usa UASG, então esse
+// filtro não restringe candidatas do PNCP quando configurado — senão todo
+// item com UASG selecionada nunca mais casaria com nada do PNCP, que é a
+// fonte principal da plataforma.
+function uasgMatches(uasgCodes: string[], tenderFonte: string, tenderUnidade: string | null): boolean {
+  if (uasgCodes.length === 0) return true
+  if (tenderFonte !== 'COMPRASNET') return true
+  return tenderUnidade !== null && uasgCodes.includes(tenderUnidade)
+}
+
 export async function findMatchCandidates(tenderId: string): Promise<MatchCandidate[]> {
   const tender = await prisma.tender.findUnique({
     where: { id: tenderId },
@@ -79,6 +90,7 @@ export async function findMatchCandidates(tenderId: string): Promise<MatchCandid
     if (mi.valorMax != null && valorEstimado != null && Number(mi.valorMax) < valorEstimado) continue
     if (mi.modalidades.length > 0 && !mi.modalidades.includes(tender.modalidade)) continue
     if (!orgaoMatches(mi.orgaos, tender.orgao)) continue
+    if (!uasgMatches(mi.uasgCodes, tender.fonte, tender.unidade)) continue
     if (mi.raioKm != null) {
       if (mi.origemLat == null || mi.origemLng == null || tender.municipioLat == null || tender.municipioLng == null)
         continue
@@ -116,6 +128,7 @@ export interface RematchInput {
   ufs: string[]
   modalidades: string[]
   orgaos: string[]
+  uasgCodes: string[]
   valorMin: number | null
   valorMax: number | null
   raioKm: number | null
@@ -136,8 +149,20 @@ export async function findMatchingTendersForItem(
   item: RematchInput,
   sinceDays = 90
 ): Promise<RematchCandidate[]> {
-  const { keywords, catmatCodes, catserCodes, ufs, modalidades, orgaos, valorMin, valorMax, raioKm, origemLat, origemLng } =
-    item
+  const {
+    keywords,
+    catmatCodes,
+    catserCodes,
+    ufs,
+    modalidades,
+    orgaos,
+    uasgCodes,
+    valorMin,
+    valorMax,
+    raioKm,
+    origemLat,
+    origemLng,
+  } = item
 
   const cutoff = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000)
   const tenders = await prisma.tender.findMany({
@@ -158,6 +183,7 @@ export async function findMatchingTendersForItem(
     if (valorMax != null && valorEstimado != null && valorMax < valorEstimado) continue
     if (modalidades.length > 0 && !modalidades.includes(t.modalidade)) continue
     if (!orgaoMatches(orgaos, t.orgao)) continue
+    if (!uasgMatches(uasgCodes, t.fonte, t.unidade)) continue
     if (raioKm != null) {
       if (origemLat == null || origemLng == null || t.municipioLat == null || t.municipioLng == null) continue
       if (haversineKm(origemLat, origemLng, t.municipioLat, t.municipioLng) > raioKm) continue

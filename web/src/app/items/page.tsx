@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRequireSession } from '@/hooks/useRequireSession'
 import { api, ApiRequestError } from '@/lib/api'
-import { MonitoredItem } from '@/lib/types'
+import { MonitoredItem, UasgResult } from '@/lib/types'
 import { MODALIDADE_OPTIONS } from '@/lib/modalidades'
+import UasgPicker from '@/components/UasgPicker'
 
 function ModalidadeCheckboxes({ selected, onChange }: { selected: string[]; onChange: (next: string[]) => void }) {
   function toggle(value: string) {
@@ -37,12 +38,21 @@ export default function ItemsPage() {
   const [catserCodes, setCatserCodes] = useState('')
   const [modalidades, setModalidades] = useState<string[]>([])
   const [orgaos, setOrgaos] = useState('')
+  const [uasgSelected, setUasgSelected] = useState<UasgResult[]>([])
   const [ufs, setUfs] = useState('')
   const [valorMax, setValorMax] = useState('')
   const [raioKm, setRaioKm] = useState('')
   const [origemMunicipio, setOrigemMunicipio] = useState('')
   const [origemUf, setOrigemUf] = useState('')
   const [creating, setCreating] = useState(false)
+
+  // Ao escolher uma UASG, sugere o nome do órgão no campo de Órgãos (que
+  // funciona tanto pro PNCP quanto pro ComprasNet) — sem duplicar se já tiver.
+  function sugerirOrgao(nomeOrgao: string, atual: string, setter: (v: string) => void) {
+    const existentes = atual.split(',').map((o) => o.trim().toLowerCase()).filter(Boolean)
+    if (existentes.includes(nomeOrgao.toLowerCase())) return
+    setter(atual ? `${atual}, ${nomeOrgao}` : nomeOrgao)
+  }
 
   // Edição de um item já cadastrado
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -52,6 +62,7 @@ export default function ItemsPage() {
   const [editCatserCodes, setEditCatserCodes] = useState('')
   const [editModalidades, setEditModalidades] = useState<string[]>([])
   const [editOrgaos, setEditOrgaos] = useState('')
+  const [editUasgSelected, setEditUasgSelected] = useState<UasgResult[]>([])
   const [editUfs, setEditUfs] = useState('')
   const [editValorMax, setEditValorMax] = useState('')
   const [editRaioKm, setEditRaioKm] = useState('')
@@ -89,6 +100,7 @@ export default function ItemsPage() {
         catserCodes: catserCodes.split(',').map((c) => c.trim()).filter(Boolean),
         modalidades,
         orgaos: orgaos.split(',').map((o) => o.trim()).filter(Boolean),
+        uasgCodes: uasgSelected.map((u) => u.codigoUasg),
         ufs: ufs.split(',').map((u) => u.trim().toUpperCase()).filter(Boolean),
         valorMax: valorMax ? Number(valorMax) : undefined,
         raioKm: raioKm ? Number(raioKm) : undefined,
@@ -101,6 +113,7 @@ export default function ItemsPage() {
       setCatserCodes('')
       setModalidades([])
       setOrgaos('')
+      setUasgSelected([])
       setUfs('')
       setValorMax('')
       setRaioKm('')
@@ -123,6 +136,13 @@ export default function ItemsPage() {
     setEditCatserCodes(item.catserCodes.join(', '))
     setEditModalidades(item.modalidades)
     setEditOrgaos(item.orgaos.join(', '))
+    setEditUasgSelected([])
+    if (item.uasgCodes.length > 0) {
+      api
+        .get<UasgResult[]>(`/api/uasg/by-codes?codes=${encodeURIComponent(item.uasgCodes.join(','))}`)
+        .then(setEditUasgSelected)
+        .catch(() => setEditUasgSelected([]))
+    }
     setEditUfs(item.ufs.join(', '))
     setEditValorMax(item.valorMax ?? '')
     setEditRaioKm(item.raioKm ? String(item.raioKm) : '')
@@ -147,6 +167,7 @@ export default function ItemsPage() {
         catserCodes: editCatserCodes.split(',').map((c) => c.trim()).filter(Boolean),
         modalidades: editModalidades,
         orgaos: editOrgaos.split(',').map((o) => o.trim()).filter(Boolean),
+        uasgCodes: editUasgSelected.map((u) => u.codigoUasg),
         ufs: editUfs.split(',').map((u) => u.trim().toUpperCase()).filter(Boolean),
         valorMax: editValorMax ? Number(editValorMax) : null,
         raioKm: editRaioKm ? Number(editRaioKm) : null,
@@ -245,6 +266,14 @@ export default function ItemsPage() {
             onChange={(e) => setOrgaos(e.target.value)}
             className="rounded border border-slate-300 px-3 py-2 text-sm sm:col-span-2"
           />
+
+          <div className="sm:col-span-2">
+            <UasgPicker
+              selected={uasgSelected}
+              onChange={setUasgSelected}
+              onPickOrgao={(nomeOrgao) => sugerirOrgao(nomeOrgao, orgaos, setOrgaos)}
+            />
+          </div>
 
           <div className="sm:col-span-2 rounded border border-slate-200 p-3">
             <p className="mb-2 text-xs font-medium text-slate-500">
@@ -346,6 +375,13 @@ export default function ItemsPage() {
                       onChange={(e) => setEditValorMax(e.target.value)}
                       className="rounded border border-slate-300 px-3 py-2 text-sm"
                     />
+                    <div className="sm:col-span-2">
+                      <UasgPicker
+                        selected={editUasgSelected}
+                        onChange={setEditUasgSelected}
+                        onPickOrgao={(nomeOrgao) => sugerirOrgao(nomeOrgao, editOrgaos, setEditOrgaos)}
+                      />
+                    </div>
                     <div className="sm:col-span-2 rounded border border-slate-200 bg-white p-3">
                       <p className="mb-2 text-xs font-medium text-slate-500">Modalidades (opcional — vazio = todas)</p>
                       <ModalidadeCheckboxes selected={editModalidades} onChange={setEditModalidades} />
