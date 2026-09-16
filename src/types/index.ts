@@ -110,6 +110,10 @@ export interface MatcherJobPayload {
   tenderId: string
 }
 
+export interface AnaliseJobPayload {
+  tenderId: string
+}
+
 // Jobs de match antigos, já enfileirados no Redis, não têm o campo `tipo` —
 // o worker discrimina pela presença de tenderMatchId, não por ele.
 export interface NotificadorMatchPayload {

@@ -42,6 +42,10 @@ jobs:
         run: npm ci
         working-directory: web
 
-      - name: Conferir tipos do frontend
-        run: npx tsc --noEmit
+      # next build, e não tsc: os tipos de rota do Next 16 (LayoutProps e afins)
+      # só existem depois que o build os gera.
+      - name: Build do frontend
+        run: npx next build
         working-directory: web
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3333

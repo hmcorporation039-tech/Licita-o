@@ -78,8 +78,28 @@ Extraia:
 
 Seja específico e cite trechos do edital quando relevante. Não invente informação que não está no texto.`
 
-export function buildUserContent(objeto: string, text: string): string {
-  return `Objeto da licitação (conforme cadastro no PNCP): ${objeto}\n\n--- TEXTO DO EDITAL ---\n\n${text}`
+// O PDF vai inteiro para o modelo, sem extração de texto e sem corte: a
+// habilitação e a qualificação técnica ficam no FIM do edital, que era
+// exatamente o pedaço descartado pelo limite de 200.000 caracteres anterior.
+// Mandar o arquivo original também resolve edital escaneado, que o pdf-parse
+// devolvia vazio e virava FAILED.
+export interface EditalDocumento {
+  nome: string
+  data: Buffer
+}
+
+export type EditalAnalyzer = (objeto: string, documentos: EditalDocumento[]) => Promise<EditalAnalysisResult>
+
+export function buildInstrucao(objeto: string, documentos: EditalDocumento[]): string {
+  const lista = documentos.map((d, i) => `${i + 1}. ${d.nome}`).join('\n')
+  return [
+    `Objeto da licitação (conforme cadastro no PNCP): ${objeto}`,
+    '',
+    'Documentos anexados, na ordem em que aparecem:',
+    lista,
+    '',
+    'Analise o conjunto completo. O Termo de Referência e os anexos costumam trazer as exigências técnicas e os documentos de habilitação que não estão no corpo do edital.',
+  ].join('\n')
 }
 
 // Erro específico pra quando o próprio modelo recusa a análise (filtro de

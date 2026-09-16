@@ -9,6 +9,7 @@ import { startColetorPNCPWorker } from './coletorPNCP'
 import { startColetorComprasnetWorker } from './coletorComprasnet'
 import { startMatcherWorker } from './matcher'
 import { startNotificadorWorker } from './notificador'
+import { startAnaliseWorker } from './analise'
 import { refreshAllOpenSituacoes } from '../services/situacaoUpdateService'
 import { cleanupOldUnmatchedTenders } from '../services/retentionService'
 import { checkExpiringDocuments } from '../services/documentAlertService'
@@ -21,8 +22,9 @@ async function main() {
   const workerComprasnet = startColetorComprasnetWorker()
   const workerMatcher = startMatcherWorker()
   const workerNotificador = startNotificadorWorker()
+  const workerAnalise = startAnaliseWorker()
 
-  console.log('✅ Workers ativos: PNCP, ComprasNet, Matcher, Notificador')
+  console.log('✅ Workers ativos: PNCP, ComprasNet, Matcher, Notificador, Análise')
 
   // Agenda coletas periódicas — envolvido em try/catch de propósito: isso
   // roda toda vez que o processo sobe, então se o Redis estiver indisponível
@@ -90,6 +92,7 @@ async function main() {
     await workerComprasnet.close()
     await workerMatcher.close()
     await workerNotificador.close()
+    await workerAnalise.close()
     process.exit(0)
   })
 }

@@ -133,11 +133,21 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
       .catch((err) => console.error(err))
   }, [id, user])
 
+  // A análise agora roda num worker (baixar vários PDFs e chamar o modelo leva
+  // minutos, e o proxy cortava a requisição antes de terminar). O POST só
+  // enfileira; o estado vem daqui.
   async function runAnalysis(force: boolean) {
     setAnalyzing(true)
     try {
-      const result = await api.post<TenderAnalysis>(`/api/tenders/${id}/analyze${force ? '?force=true' : ''}`)
-      setAnalysis(result)
+      const enfileirada = await api.post<TenderAnalysis>(
+        `/api/tenders/${id}/analyze${force ? '?force=true' : ''}`
+      )
+      setAnalysis(enfileirada)
+
+      if (enfileirada.status !== 'DONE') {
+        await aguardarAnalise()
+      }
+
       // A análise pode ter trazido prazo de impugnação/esclarecimento —
       // busca o plano de novo pra esses marcos aparecerem sem precisar recarregar.
       if (user) {
@@ -150,6 +160,23 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
       alert(err instanceof ApiRequestError ? err.message : 'Erro ao analisar o edital')
     } finally {
       setAnalyzing(false)
+    }
+  }
+
+  async function aguardarAnalise() {
+    const INTERVALO_MS = 4000
+    const TENTATIVAS_MAX = 150 // ~10 minutos
+
+    for (let tentativa = 0; tentativa < TENTATIVAS_MAX; tentativa++) {
+      await new Promise((resolve) => setTimeout(resolve, INTERVALO_MS))
+
+      try {
+        const atual = await api.get<TenderAnalysis>(`/api/tenders/${id}/analysis`)
+        setAnalysis(atual)
+        if (atual.status !== 'PENDING' && atual.status !== 'RUNNING') return
+      } catch (err) {
+        if (!(err instanceof ApiRequestError && err.status === 404)) throw err
+      }
     }
   }
 

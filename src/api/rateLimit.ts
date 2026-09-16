@@ -8,9 +8,17 @@ import rateLimit from 'express-rate-limit'
 
 const JANELA_MS = 15 * 60 * 1000
 
+// A suíte E2E faz dezenas de logins do mesmo IP em segundos e bateria no
+// limite. RATE_LIMIT_DISABLED existe só para isso — ver o script test:e2e.
+const desligado = process.env.RATE_LIMIT_DISABLED === 'true'
+
+function limite(valor: number): number {
+  return desligado ? Number.MAX_SAFE_INTEGER : valor
+}
+
 export const globalLimiter = rateLimit({
   windowMs: JANELA_MS,
-  limit: 600,
+  limit: limite(600),
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { error: 'Muitas requisições — aguarde alguns minutos e tente de novo' },
@@ -18,7 +26,7 @@ export const globalLimiter = rateLimit({
 
 export const loginLimiter = rateLimit({
   windowMs: JANELA_MS,
-  limit: 10,
+  limit: limite(10),
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   // Login que deu certo não conta para o limite — quem sabe a senha não é
@@ -29,7 +37,7 @@ export const loginLimiter = rateLimit({
 
 export const escritaSensivelLimiter = rateLimit({
   windowMs: JANELA_MS,
-  limit: 60,
+  limit: limite(60),
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { error: 'Muitas requisições — aguarde alguns minutos e tente de novo' },

@@ -7,7 +7,8 @@ import { z } from 'zod'
 import { prisma, saveTenderItemsIfMissing } from '../../services/tenderService'
 import { asyncHandler, ApiError } from '../asyncHandler'
 import { buildChecklistTemplate, ChecklistItem } from '../../lib/checklistTemplate'
-import { runEditalAnalysis } from '../../services/editalAnalysisService'
+import { analiseHabilitada } from '../../services/editalAnalysisService'
+import { analiseQueue } from '../../queues'
 import { fetchPNCPItens } from '../../services/pncpItemsService'
 import { normalize } from '../../lib/geoService'
 import { buildAutoMilestones, PlanMilestone } from '../../lib/participationPlanTemplate'
@@ -246,35 +247,43 @@ tendersRouter.get(
   })
 )
 
-// Dispara (ou retorna a já existente) a análise do edital via IA.
-// Baixa o documento do PNCP, extrai o texto e analisa com a Claude —
-// leva alguns segundos, por isso é síncrono na resposta.
+// Enfileira a análise do edital e responde na hora com o status. O trabalho
+// em si (baixar os PDFs do PNCP e chamar o modelo) leva minutos e roda no
+// worker — antes era síncrono aqui e o proxy cortava a requisição antes de
+// terminar. O cliente acompanha por GET /:id/analysis.
 tendersRouter.post(
   '/:id/analyze',
   asyncHandler(async (req, res) => {
     const tender = await prisma.tender.findUnique({ where: { id: req.params.id }, select: { id: true } })
     if (!tender) throw new ApiError(404, 'Licitação não encontrada')
 
+    if (!analiseHabilitada()) {
+      throw new ApiError(503, 'A análise de edital por IA está desligada nesta instalação')
+    }
+
     const force = req.query.force === 'true'
+    const existing = await prisma.tenderAnalysis.findUnique({ where: { tenderId: req.params.id } })
 
     if (!force) {
-      const existing = await prisma.tenderAnalysis.findUnique({ where: { tenderId: req.params.id } })
-      if (existing && existing.status === 'DONE') {
+      if (existing?.status === 'DONE') {
         res.json(existing)
+        return
+      }
+      if (existing?.status === 'RUNNING' || existing?.status === 'PENDING') {
+        res.status(202).json(existing)
         return
       }
     }
 
-    // Erros já ficam registrados no próprio registro (status FAILED + errorMsg);
-    // não propaga como 500 para o cliente conseguir mostrar o motivo.
-    try {
-      await runEditalAnalysis(req.params.id)
-    } catch (err) {
-      console.error('[Análise de edital] Erro:', err)
-    }
+    const pendente = await prisma.tenderAnalysis.upsert({
+      where: { tenderId: req.params.id },
+      update: { status: 'PENDING', errorMsg: null },
+      create: { tenderId: req.params.id, status: 'PENDING' },
+    })
 
-    const result = await prisma.tenderAnalysis.findUnique({ where: { tenderId: req.params.id } })
-    res.json(result)
+    await analiseQueue.add('analisar-edital', { tenderId: req.params.id })
+
+    res.status(202).json(pendente)
   })
 )
 
