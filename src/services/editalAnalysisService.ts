@@ -21,13 +21,18 @@ import {
   listPNCPDocuments,
   selecionarDocumentos,
 } from './pncpDocumentsService'
+import { extractPdf, temCamadaDeTexto } from './pdfTextService'
 import { AnalysisRefusedError, EditalAnalyzer, EditalDocumento } from './llm/types'
 import { analyzeEdital as analyzeWithClaude } from './llm/claudeAnalyzer'
 import { analyzeEdital as analyzeWithGemini } from './llm/geminiAnalyzer'
 
 // Teto por requisição da API (32 MB). Ficamos abaixo com folga porque o
-// base64 infla o binário em cerca de 1/3.
-const MAX_BYTES_TOTAL = 20 * 1024 * 1024
+// base64 infla o binário em cerca de 1/3. Só conta o que vai em PDF nativo.
+const MAX_BYTES_PDF_TOTAL = 20 * 1024 * 1024
+// Orçamento de texto do conjunto. Nenhum documento é truncado: quando o
+// orçamento acaba, paramos de incluir novos — o edital, que é o primeiro da
+// fila de prioridade, nunca é o cortado.
+const MAX_CARACTERES_TOTAL = 800_000
 const MAX_DOCUMENTOS = 5
 
 export function analiseHabilitada(): boolean {
@@ -41,8 +46,9 @@ function getAnalyzer(): EditalAnalyzer {
   throw new Error(`AI_PROVIDER inválido: "${provider}" — use "claude" ou "gemini"`)
 }
 
-// Baixa até MAX_DOCUMENTOS PDFs, do mais relevante para o menos, parando
-// quando o conjunto chega ao teto de tamanho.
+// Baixa até MAX_DOCUMENTOS PDFs, do mais relevante para o menos, e decide um
+// a um se vai como texto (barato) ou em PDF nativo (quando é escaneado e não
+// há texto para extrair).
 async function baixarDocumentos(
   cnpj: string,
   ano: number,
@@ -50,7 +56,8 @@ async function baixarDocumentos(
 ): Promise<EditalDocumento[]> {
   const disponiveis = selecionarDocumentos(await listPNCPDocuments(cnpj, ano, sequencial))
   const selecionados: EditalDocumento[] = []
-  let bytes = 0
+  let bytesDePdf = 0
+  let caracteres = 0
 
   for (const doc of disponiveis) {
     if (selecionados.length >= MAX_DOCUMENTOS) break
@@ -58,10 +65,29 @@ async function baixarDocumentos(
     try {
       const buffer = await downloadPNCPDocument(doc.uri)
       if (!isPdf(buffer)) continue
-      if (bytes + buffer.byteLength > MAX_BYTES_TOTAL) continue
 
-      selecionados.push({ nome: doc.titulo, data: buffer })
-      bytes += buffer.byteLength
+      let extraido: { texto: string; paginas: number } | null = null
+      try {
+        extraido = await extractPdf(buffer)
+      } catch (err) {
+        console.warn(
+          `[Análise de edital] Não deu para ler o texto de "${doc.titulo}", tentando como PDF:`,
+          err instanceof Error ? err.message : err
+        )
+      }
+
+      if (extraido && temCamadaDeTexto(extraido.texto, extraido.paginas)) {
+        if (caracteres + extraido.texto.length > MAX_CARACTERES_TOTAL) continue
+        selecionados.push({ nome: doc.titulo, tipo: 'texto', texto: extraido.texto })
+        caracteres += extraido.texto.length
+        continue
+      }
+
+      // Sem camada de texto: é escaneado. Vai o arquivo, para o modelo ler a página.
+      if (bytesDePdf + buffer.byteLength > MAX_BYTES_PDF_TOTAL) continue
+      console.log(`[Análise de edital] "${doc.titulo}" parece escaneado — enviando como PDF nativo.`)
+      selecionados.push({ nome: doc.titulo, tipo: 'pdf', data: buffer })
+      bytesDePdf += buffer.byteLength
     } catch (err) {
       console.error(`[Análise de edital] Falha ao baixar "${doc.titulo}":`, err instanceof Error ? err.message : err)
     }

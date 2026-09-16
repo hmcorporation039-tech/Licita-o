@@ -25,9 +25,11 @@ export async function analyzeEdital(
   documentos: EditalDocumento[]
 ): Promise<EditalAnalysisResult> {
   const partes = [
-    ...documentos.map((doc) => ({
-      inlineData: { mimeType: 'application/pdf', data: doc.data.toString('base64') },
-    })),
+    ...documentos.map((doc) =>
+      doc.tipo === 'pdf'
+        ? { inlineData: { mimeType: 'application/pdf', data: doc.data.toString('base64') } }
+        : { text: `--- ${doc.nome} ---\n\n${doc.texto}` }
+    ),
     { text: buildInstrucao(objeto, documentos) },
   ]
 

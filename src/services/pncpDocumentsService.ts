@@ -36,14 +36,32 @@ export function isPdf(buffer: Buffer): boolean {
   return buffer.subarray(0, 5).toString('latin1') === '%PDF-'
 }
 
-// Quanto mais alto, mais cedo o documento entra na análise. Analisar só o
-// "edital" deixava de fora o Termo de Referência, que é onde ficam as
-// exigências técnicas reais, e os anexos de habilitação.
+// Peças administrativas do processo: existem no PNCP, mas não dizem nada sobre
+// como participar. Autorização de abertura, comprovante de publicação e
+// solicitação de parecer entram aqui.
+const ADMINISTRATIVO =
+  /autoriza[çc][ãa]o|comprovante|publica[çc][ãa]o|parecer|despacho|solicita[çc][ãa]o|^dfd$|\bdfd\b|aviso de licita/i
+
+const EDITAL = /\bedital\b/i
+const TERMO_DE_REFERENCIA = /termo\s*de\s*refer|projeto\s*b[aá]sico|\btr\b/i
+const APOIO = /anexo|habilita|planilha|or[cç]ament|minuta|contrato/i
+
+// Quanto mais alto, mais cedo o documento entra na análise.
+//
+// A classificação olha o TÍTULO primeiro, não o tipoDocumentoNome: na prática
+// o órgão carimba "Edital" no tipo de quase tudo que anexa ao processo, então
+// classificar por tipo empurrava o Termo de Referência — que é onde ficam as
+// exigências técnicas reais — para fora do corte, atrás de comprovante de
+// publicação e solicitação de parecer.
 function prioridade(doc: PNCPDocumentInfo): number {
-  const texto = `${doc.titulo} ${doc.tipoDocumentoNome}`
-  if (/edital/i.test(texto)) return 4
-  if (/termo\s*de\s*refer|projeto\s*b[aá]sico/i.test(texto)) return 3
-  if (/anexo|habilita|planilha|or[cç]ament/i.test(texto)) return 2
+  const titulo = doc.titulo ?? ''
+  const tipo = doc.tipoDocumentoNome ?? ''
+
+  if (ADMINISTRATIVO.test(titulo)) return 0
+  if (EDITAL.test(titulo)) return 5
+  if (TERMO_DE_REFERENCIA.test(titulo) || TERMO_DE_REFERENCIA.test(tipo)) return 4
+  if (APOIO.test(titulo)) return 3
+  if (EDITAL.test(tipo)) return 2
   return 1
 }
 

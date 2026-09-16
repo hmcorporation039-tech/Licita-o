@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Plataforma de monitoramento de licitações — PNCP + ComprasNet",
   "scripts": {
+    "analise:smoke": "ts-node scripts/smokeAnaliseEdital.ts",
     "api": "ts-node src/api/server.ts",
     "build": "tsc",
     "cypress:open": "cypress open",

@@ -78,15 +78,18 @@ Extraia:
 
 Seja específico e cite trechos do edital quando relevante. Não invente informação que não está no texto.`
 
-// O PDF vai inteiro para o modelo, sem extração de texto e sem corte: a
-// habilitação e a qualificação técnica ficam no FIM do edital, que era
-// exatamente o pedaço descartado pelo limite de 200.000 caracteres anterior.
-// Mandar o arquivo original também resolve edital escaneado, que o pdf-parse
-// devolvia vazio e virava FAILED.
-export interface EditalDocumento {
-  nome: string
-  data: Buffer
-}
+// Modo híbrido. Nenhum dos dois é truncado: a habilitação e a qualificação
+// técnica ficam no FIM do edital, que era exatamente o pedaço descartado pelo
+// limite de 200.000 caracteres anterior.
+//
+// 'texto' — edital com camada de texto. Barato, é o caminho da maioria.
+// 'pdf'   — edital escaneado (foto de papel), que não tem texto para extrair.
+//           O modelo lê a página como imagem. Custa mais token, e por isso só
+//           é usado quando o texto não veio. Antes esses casos simplesmente
+//           falhavam com "não foi possível extrair texto do documento".
+export type EditalDocumento =
+  | { nome: string; tipo: 'texto'; texto: string }
+  | { nome: string; tipo: 'pdf'; data: Buffer }
 
 export type EditalAnalyzer = (objeto: string, documentos: EditalDocumento[]) => Promise<EditalAnalysisResult>
 

@@ -26,15 +26,19 @@ export async function analyzeEdital(
   objeto: string,
   documentos: EditalDocumento[]
 ): Promise<EditalAnalysisResult> {
-  const blocosDeDocumento: Anthropic.DocumentBlockParam[] = documentos.map((doc) => ({
-    type: 'document',
-    title: doc.nome,
-    source: {
-      type: 'base64',
-      media_type: 'application/pdf',
-      data: doc.data.toString('base64'),
-    },
-  }))
+  const blocosDeDocumento: Anthropic.ContentBlockParam[] = documentos.map((doc) =>
+    doc.tipo === 'pdf'
+      ? {
+          type: 'document',
+          title: doc.nome,
+          source: { type: 'base64', media_type: 'application/pdf', data: doc.data.toString('base64') },
+        }
+      : {
+          type: 'document',
+          title: doc.nome,
+          source: { type: 'text', media_type: 'text/plain', data: doc.texto },
+        }
+  )
 
   // Streaming porque um edital de centenas de páginas com effort alto passa
   // do timeout HTTP padrão do SDK numa chamada não-streaming.
