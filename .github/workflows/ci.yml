@@ -1,0 +1,47 @@
+name: CI
+
+# Nenhum segredo é usado aqui de propósito: o pipeline não toca banco, Redis
+# nem API de IA. Typecheck, lint e testes de função pura rodam offline.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+      JWT_SECRET: ci-apenas-para-compilar
+      AI_ANALYSIS_ENABLED: 'false'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependências da API
+        run: npm ci
+
+      - name: Gerar Prisma Client
+        run: npx prisma generate
+
+      - name: Conferir tipos da API
+        run: npm run typecheck
+
+      - name: Lint da API
+        run: npm run lint
+
+      - name: Testes unitários
+        run: npm run test
+
+      - name: Instalar dependências do frontend
+        run: npm ci
+        working-directory: web
+
+      - name: Conferir tipos do frontend
+        run: npx tsc --noEmit
+        working-directory: web

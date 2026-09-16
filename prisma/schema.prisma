@@ -223,6 +223,10 @@ model TenderItem {
   tenderId        String   @map("tender_id")
   numeroItem      Int?     @map("numero_item")
   descricao       String   @db.Text
+  // Mesma razao das colunas *_norm de Tender: o matcher procura a palavra-chave
+  // tambem na descricao do item, e o pre-filtro no banco precisa achar
+  // "cirurgico" dentro de "cirurgico" sem depender da extensao unaccent.
+  descricaoNorm   String?  @map("descricao_norm") @db.Text
   catmatCode      String?  @map("catmat_code")
   catserCode      String?  @map("catser_code")
   unidadeMedida   String?  @map("unidade_medida")

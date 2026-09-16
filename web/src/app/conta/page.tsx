@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRequireSession } from '@/hooks/useRequireSession'
 import { api, ApiRequestError } from '@/lib/api'
+import { replaceSessionToken } from '@/lib/session'
 
 export default function ContaPage() {
   const user = useRequireSession()
@@ -29,7 +30,11 @@ export default function ContaPage() {
 
     setSaving(true)
     try {
-      await api.post('/api/auth/change-password', { currentPassword, newPassword })
+      const { token } = await api.post<{ token: string }>('/api/auth/change-password', {
+        currentPassword,
+        newPassword,
+      })
+      replaceSessionToken(token)
       setSuccess(true)
       setCurrentPassword('')
       setNewPassword('')

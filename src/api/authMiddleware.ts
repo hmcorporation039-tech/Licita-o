@@ -32,6 +32,9 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
 
     const user = await prisma.user.findUnique({ where: { id: payload.userId } })
     if (!user || !user.active) throw new ApiError(401, 'Sessão inválida ou expirada — faça login novamente')
+    if (user.tokenVersion !== payload.tokenVersion) {
+      throw new ApiError(401, 'Sessão encerrada — faça login novamente')
+    }
     if (user.accessExpiresAt && user.accessExpiresAt.getTime() < Date.now()) {
       throw new ApiError(403, 'O acesso desta conta expirou — fale com o administrador')
     }

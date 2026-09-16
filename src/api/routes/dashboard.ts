@@ -47,10 +47,17 @@ dashboardRouter.get(
 
     const prazoCutoff = now + PRAZO_JANELA_DIAS * 24 * 60 * 60 * 1000
     const proximosPrazos: { tenderId: string; tenderObjeto: string; label: string; date: string }[] = []
+
+    // Uma consulta para todas as análises, em vez de uma por plano dentro do laço.
+    const analyses = await prisma.tenderAnalysis.findMany({
+      where: { tenderId: { in: planos.map((p) => p.tenderId) }, status: 'DONE' },
+    })
+    const analysePorTender = new Map(analyses.map((a) => [a.tenderId, a]))
+
     for (const plano of planos) {
-      const analysis = await prisma.tenderAnalysis.findUnique({ where: { tenderId: plano.tenderId } })
+      const analysis = analysePorTender.get(plano.tenderId)
       const analysisPrazos =
-        analysis?.status === 'DONE' && analysis.resultado
+        analysis?.resultado
           ? (analysis.resultado as unknown as { prazoImpugnacao: string; prazoEsclarecimento: string })
           : null
       const milestones = buildAutoMilestones(plano.tender, analysisPrazos)

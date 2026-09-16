@@ -9,7 +9,8 @@ import { Worker, Job } from 'bullmq'
 import { redisConnection, matcherQueue } from '../queues'
 import { comprasnetClient } from '../lib/httpClient'
 import { parseComprasnetTender, parseComprasnetDispensa } from '../services/comprasnetParser'
-import { saveTender, saveWorkerLog } from '../services/tenderService'
+import { prisma, saveTender, saveWorkerLog } from '../services/tenderService'
+import { findMunicipioByNomeUf } from '../lib/geoService'
 import { resolveColetaWindow } from '../lib/coletaWindow'
 import { ultimaPublicacaoColetada } from '../services/coletaCursorService'
 import { avisarAlteracaoDeTender } from '../services/tenderChangeService'
@@ -31,6 +32,44 @@ async function fetchPaginated(endpoint: string, params: Record<string, any>, pag
   }
 }
 
+// O endpoint do módulo legado não devolve UF nem órgão — só o código da UASG.
+// Como o matcher trata UF como portão, quem filtra por estado (quase todo
+// mundo) nunca via nada do ComprasNet. A tabela Uasg já está no banco com UF,
+// órgão e município: basta cruzar antes de salvar.
+async function enriquecerComUasg(tenders: NormalizedTender[]): Promise<NormalizedTender[]> {
+  const codigos = Array.from(
+    new Set(tenders.map((t) => t.unidade).filter((u): u is string => Boolean(u)))
+  )
+  if (codigos.length === 0) return tenders
+
+  const uasgs = await prisma.uasg.findMany({
+    where: { codigoUasg: { in: codigos } },
+    select: { codigoUasg: true, nomeUasg: true, nomeOrgao: true, siglaUf: true, municipioNome: true },
+  })
+  if (uasgs.length === 0) return tenders
+
+  const porCodigo = new Map(uasgs.map((u) => [u.codigoUasg, u]))
+
+  return tenders.map((tender) => {
+    const uasg = tender.unidade ? porCodigo.get(tender.unidade) : undefined
+    if (!uasg) return tender
+
+    const uf = tender.uf ?? uasg.siglaUf ?? undefined
+    const municipio = tender.municipio ?? uasg.municipioNome ?? undefined
+    const geo = municipio && uf ? findMunicipioByNomeUf(municipio, uf) : undefined
+
+    return {
+      ...tender,
+      uf,
+      municipio,
+      municipioIbge: tender.municipioIbge ?? geo?.codigoIbge,
+      municipioLat: tender.municipioLat ?? geo?.lat,
+      municipioLng: tender.municipioLng ?? geo?.lng,
+      orgao: tender.orgao ?? uasg.nomeOrgao ?? uasg.nomeUasg,
+    }
+  })
+}
+
 // Salva um lote de tenders já normalizados, retornando contadores
 async function saveAll(
   tenders: NormalizedTender[]
@@ -38,7 +77,8 @@ async function saveAll(
   let totalNew = 0
   let totalDupes = 0
   let totalUpdated = 0
-  for (const tender of tenders) {
+  const enriquecidos = await enriquecerComUasg(tenders)
+  for (const tender of enriquecidos) {
     try {
       const result = await saveTender(tender)
       if (result.isNew) {

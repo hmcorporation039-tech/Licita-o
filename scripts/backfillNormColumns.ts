@@ -41,8 +41,34 @@ async function main() {
     console.log(`${processed}/${total} processado(s)...`)
   }
 
+  await backfillItens()
+
   console.log('Concluído.')
   await prisma.$disconnect()
+}
+
+async function backfillItens() {
+  const total = await prisma.tenderItem.count({ where: { descricaoNorm: null } })
+  console.log(`${total} item(ns) de licitação sem a descrição normalizada.`)
+
+  let processed = 0
+  for (;;) {
+    const batch = await prisma.tenderItem.findMany({
+      where: { descricaoNorm: null },
+      select: { id: true, descricao: true },
+      take: BATCH_SIZE,
+    })
+    if (batch.length === 0) break
+
+    await prisma.$transaction(
+      batch.map((i) =>
+        prisma.tenderItem.update({ where: { id: i.id }, data: { descricaoNorm: normalize(i.descricao) } })
+      )
+    )
+
+    processed += batch.length
+    console.log(`${processed}/${total} item(ns) processado(s)...`)
+  }
 }
 
 main().catch((err) => {

@@ -107,8 +107,18 @@ adminRouter.patch(
     const existing = await prisma.user.findUnique({ where: { id: req.params.id } })
     if (!existing) throw new ApiError(404, 'Usuário não encontrado')
 
-    const data: { active?: boolean; isAdmin?: boolean; accessExpiresAt?: Date | null } = {}
-    if (body.active !== undefined) data.active = body.active
+    const data: {
+      active?: boolean
+      isAdmin?: boolean
+      accessExpiresAt?: Date | null
+      tokenVersion?: { increment: number }
+    } = {}
+    if (body.active !== undefined) {
+      data.active = body.active
+      // Desativar precisa derrubar a sessão em curso, não só impedir o próximo
+      // login — o token de 30 dias sobreviveria até expirar sozinho.
+      if (!body.active) data.tokenVersion = { increment: 1 }
+    }
     if (body.isAdmin !== undefined) data.isAdmin = body.isAdmin
     if (body.diasValidade !== undefined) data.accessExpiresAt = computeExpiresAt(body.diasValidade)
 
