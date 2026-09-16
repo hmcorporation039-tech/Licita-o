@@ -19,6 +19,7 @@
     "documentos:check-expirations": "ts-node scripts/checkDocumentExpirations.ts",
     "lint": "eslint src scripts tests",
     "matches:rebuild": "ts-node scripts/rebuildMatches.ts",
+    "migrar:producao": "ts-node scripts/migrarProducao.ts",
     "postinstall": "prisma generate",
     "situacoes:refresh": "ts-node scripts/refreshSituacoes.ts",
     "start": "node dist/entrypoint.js",

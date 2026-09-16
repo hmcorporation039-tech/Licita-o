@@ -1,5 +1,23 @@
 # Runbook de migração — v1.0 → v2.0
 
+## Versão curta
+
+Um comando só. Ele detecta em que estado o banco está e faz o certo:
+
+```bash
+DATABASE_URL="postgresql://..." npm run migrar:producao
+```
+
+Para só ver o plano, sem alterar nada:
+
+```bash
+DATABASE_URL="postgresql://..." npm run migrar:producao -- --dry
+```
+
+O resto deste documento explica o que ele faz e por quê — leia se algo der errado.
+
+---
+
 Este documento é para ser executado **por uma pessoa, contra o banco de produção**.
 Nada aqui roda sozinho no deploy.
 
