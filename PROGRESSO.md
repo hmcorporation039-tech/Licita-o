@@ -32,8 +32,11 @@ Plataforma de Monitoramento de Licitações — PNCP + ComprasNet.
 
 ## v2.0 — Correção dos 13 defeitos da auditoria
 
-Restrição da fase: **zero consumo do crédito da API de IA.** Nenhuma etapa abaixo
-disparou chamada à Claude ou ao Gemini.
+Restrição da fase: **nenhuma correção exigiu crédito de API.** Os Blocos 1 e 2
+inteiros, mais todo o código do Bloco 3, foram escritos e verificados offline.
+A única chamada paga foi uma execução deliberada de `analise:smoke` na cota
+gratuita do Gemini, para validar o Bloco 3 ponta a ponta. A Anthropic não foi
+chamada em momento nenhum.
 
 ### Bloco 1 — Críticos, segurança e processo
 
@@ -43,7 +46,7 @@ disparou chamada à Claude ou ao Gemini.
 | P0-02 | Licitação nunca atualizada depois de coletada — prazo prorrogado e valor retificado nunca chegavam ao usuário | `saveTender` virou upsert com comparação de hash de conteúdo; aviso de "licitação alterada" para quem acompanha | ✅ |
 | P0-03 | Banco não reconstruível — uma migration com 7 tabelas para um schema de 12 modelos | Baseline regerado do schema; `db:push` removido dos scripts; runbook em `MIGRACAO.md` | ✅ |
 | P1-09 | Sem rate limit no login, CORS aberto, HTML não escapado em e-mail, sessão de 30 dias sem revogação | `express-rate-limit`, `helmet`, CORS por allowlist, `escapeHtml`/`safeHttpUrl`, revogação via `tokenVersion` | ✅ |
-| P2-13 | Nenhum teste unitário do núcleo de valor | `src/lib/matching.ts` extraída e 61 testes Vitest; CI no GitHub Actions sem banco e sem segredo | ✅ |
+| P2-13 | Nenhum teste unitário do núcleo de valor | `src/lib/matching.ts` extraída e 73 testes Vitest; CI no GitHub Actions sem banco e sem segredo | ✅ |
 
 ### Bloco 2 — Escala
 
@@ -80,13 +83,13 @@ de usá-lo em produção.
 | Passo | Resultado |
 |---|---|
 | `npm run typecheck` | ✅ limpo |
-| `npm run test` | ✅ 61 testes, 4 arquivos |
+| `npm run test` | ✅ 73 testes, 6 arquivos |
 | `next build` (frontend) | ✅ 14 rotas, TypeScript verde |
 | Migration baseline | ✅ 12 tabelas, 8 enums, 28+ índices |
 | `npm run analise:smoke` (Gemini) | ✅ licitação real do PNCP, 27,7s, JSON completo |
 
 Pendente de ambiente real (ver `MIGRACAO.md`): E2E Cypress, `migrate resolve` em
-produção, e a validação da análise de edital.
+produção, e a análise de edital pelo caminho da Claude.
 
 ---
 
