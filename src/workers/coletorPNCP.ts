@@ -8,6 +8,9 @@ import { redisConnection, matcherQueue } from '../queues'
 import { pncpClient } from '../lib/httpClient'
 import { parsePNCPTender } from '../services/pncpParser'
 import { saveTender, saveWorkerLog } from '../services/tenderService'
+import { resolveColetaWindow } from '../lib/coletaWindow'
+import { ultimaPublicacaoColetada } from '../services/coletaCursorService'
+import { avisarAlteracaoDeTender } from '../services/tenderChangeService'
 import { ColetorJobPayload } from '../types'
 
 // Todos os códigos de modalidade do PNCP (1 a 13, ver PNCP_MODALIDADE_MAP em types/index.ts)
@@ -45,11 +48,14 @@ export function startColetorPNCPWorker() {
   const worker = new Worker<ColetorJobPayload>(
     'coletor-pncp',
     async (job: Job<ColetorJobPayload>) => {
-      const { dataInicial, dataFinal } = job.data
+      const { dataInicial, dataFinal } = resolveColetaWindow(job.data, {
+        ultimaPublicacaoColetada: await ultimaPublicacaoColetada('PNCP'),
+      })
       const startedAt = new Date()
       let totalFetched = 0
       let totalNew = 0
       let totalDupes = 0
+      let totalUpdated = 0
 
       console.log(`[PNCP Worker] Iniciando coleta ${dataInicial} → ${dataFinal}`)
 
@@ -87,6 +93,10 @@ export function startColetorPNCPWorker() {
                     await matcherQueue.add('match-tender', { tenderId: result.tenderId })
                   } else {
                     totalDupes++
+                    if (result.changed) {
+                      totalUpdated++
+                      await avisarAlteracaoDeTender(result.tenderId, result.changedFields)
+                    }
                   }
                 } catch (itemErr) {
                   console.error('[PNCP Worker] Erro ao processar item:', itemErr)
@@ -109,13 +119,14 @@ export function startColetorPNCPWorker() {
           totalFetched,
           totalNew,
           totalDupes,
+          totalUpdated,
           errorMsg: hadModalidadeErrors ? 'Uma ou mais modalidades falharam — ver logs do worker' : undefined,
           startedAt,
           finishedAt: new Date(),
         })
 
         console.log(
-          `[PNCP Worker] Concluído — coletados: ${totalFetched}, novos: ${totalNew}, dupes: ${totalDupes}${hadModalidadeErrors ? ' (com falhas parciais)' : ''}`
+          `[PNCP Worker] Concluído — coletados: ${totalFetched}, novos: ${totalNew}, atualizados: ${totalUpdated}, inalterados: ${totalDupes - totalUpdated}${hadModalidadeErrors ? ' (com falhas parciais)' : ''}`
         )
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err)
@@ -126,6 +137,7 @@ export function startColetorPNCPWorker() {
           totalFetched,
           totalNew,
           totalDupes,
+          totalUpdated,
           errorMsg,
           startedAt,
           finishedAt: new Date(),

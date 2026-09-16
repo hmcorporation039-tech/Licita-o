@@ -4,7 +4,7 @@
 // ============================================================
 
 import 'dotenv/config'
-import { scheduleColetorJobs } from '../queues'
+import { dispararColetaInicial, scheduleColetorJobs } from '../queues'
 import { startColetorPNCPWorker } from './coletorPNCP'
 import { startColetorComprasnetWorker } from './coletorComprasnet'
 import { startMatcherWorker } from './matcher'
@@ -32,27 +32,9 @@ async function main() {
   // aconteceu e inundou os logs do serviço).
   try {
     await scheduleColetorJobs()
+    await dispararColetaInicial()
 
-    // Dispara uma coleta imediata ao iniciar (backfill dos últimos 2 dias)
-    const { coletorPNCPQueue, coletorComprasnetQueue } = await import('../queues')
-    const today = new Date()
-    const twoDaysAgo = new Date()
-    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2)
-    const fmt = (d: Date) => d.toISOString().split('T')[0]
-
-    await coletorPNCPQueue.add('coleta-pncp-inicial', {
-      fonte: 'PNCP',
-      dataInicial: fmt(twoDaysAgo),
-      dataFinal: fmt(today),
-    })
-
-    await coletorComprasnetQueue.add('coleta-comprasnet-inicial', {
-      fonte: 'COMPRASNET',
-      dataInicial: fmt(twoDaysAgo),
-      dataFinal: fmt(today),
-    })
-
-    console.log('📥 Coleta inicial disparada (últimos 2 dias).')
+    console.log('📥 Coleta inicial disparada.')
   } catch (err) {
     console.error('[Startup] Erro ao agendar jobs de coleta (Redis indisponível?) — workers seguem no ar:', err)
   }

@@ -10,6 +10,9 @@ import { redisConnection, matcherQueue } from '../queues'
 import { comprasnetClient } from '../lib/httpClient'
 import { parseComprasnetTender, parseComprasnetDispensa } from '../services/comprasnetParser'
 import { saveTender, saveWorkerLog } from '../services/tenderService'
+import { resolveColetaWindow } from '../lib/coletaWindow'
+import { ultimaPublicacaoColetada } from '../services/coletaCursorService'
+import { avisarAlteracaoDeTender } from '../services/tenderChangeService'
 import { ColetorJobPayload, NormalizedTender } from '../types'
 
 // A API exige tamanhoPagina entre 10 e 500
@@ -29,9 +32,12 @@ async function fetchPaginated(endpoint: string, params: Record<string, any>, pag
 }
 
 // Salva um lote de tenders já normalizados, retornando contadores
-async function saveAll(tenders: NormalizedTender[]): Promise<{ totalNew: number; totalDupes: number }> {
+async function saveAll(
+  tenders: NormalizedTender[]
+): Promise<{ totalNew: number; totalDupes: number; totalUpdated: number }> {
   let totalNew = 0
   let totalDupes = 0
+  let totalUpdated = 0
   for (const tender of tenders) {
     try {
       const result = await saveTender(tender)
@@ -40,23 +46,30 @@ async function saveAll(tenders: NormalizedTender[]): Promise<{ totalNew: number;
         await matcherQueue.add('match-tender', { tenderId: result.tenderId })
       } else {
         totalDupes++
+        if (result.changed) {
+          totalUpdated++
+          await avisarAlteracaoDeTender(result.tenderId, result.changedFields)
+        }
       }
     } catch (itemErr) {
       console.error('[ComprasNet Worker] Erro ao processar item:', itemErr)
     }
   }
-  return { totalNew, totalDupes }
+  return { totalNew, totalDupes, totalUpdated }
 }
 
 export function startColetorComprasnetWorker() {
   const worker = new Worker<ColetorJobPayload>(
     'coletor-comprasnet',
     async (job: Job<ColetorJobPayload>) => {
-      const { dataInicial, dataFinal } = job.data
+      const { dataInicial, dataFinal } = resolveColetaWindow(job.data, {
+        ultimaPublicacaoColetada: await ultimaPublicacaoColetada('COMPRASNET'),
+      })
       const startedAt = new Date()
       let totalFetched = 0
       let totalNew = 0
       let totalDupes = 0
+      let totalUpdated = 0
       let hadErrors = false
 
       console.log(`[ComprasNet Worker] Iniciando coleta ${dataInicial} → ${dataFinal}`)
@@ -77,6 +90,7 @@ export function startColetorComprasnetWorker() {
           const result = await saveAll(data.map(parseComprasnetTender))
           totalNew += result.totalNew
           totalDupes += result.totalDupes
+          totalUpdated += result.totalUpdated
           pagina++
         }
       } catch (err) {
@@ -113,6 +127,7 @@ export function startColetorComprasnetWorker() {
             const result = await saveAll(data.map(parseComprasnetDispensa))
             totalNew += result.totalNew
             totalDupes += result.totalDupes
+            totalUpdated += result.totalUpdated
             pagina++
           }
         }
@@ -128,13 +143,14 @@ export function startColetorComprasnetWorker() {
         totalFetched,
         totalNew,
         totalDupes,
+        totalUpdated,
         errorMsg: hadErrors ? 'Uma das fases (licitação/dispensa) falhou — ver logs do worker' : undefined,
         startedAt,
         finishedAt: new Date(),
       })
 
       console.log(
-        `[ComprasNet Worker] Concluído — coletados: ${totalFetched}, novos: ${totalNew}, dupes: ${totalDupes}${hadErrors ? ' (com falhas parciais)' : ''}`
+        `[ComprasNet Worker] Concluído — coletados: ${totalFetched}, novos: ${totalNew}, atualizados: ${totalUpdated}, inalterados: ${totalDupes - totalUpdated}${hadErrors ? ' (com falhas parciais)' : ''}`
       )
     },
     {
