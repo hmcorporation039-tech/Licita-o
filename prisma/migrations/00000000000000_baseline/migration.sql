@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "Plan" AS ENUM ('FREE', 'PRO', 'ENTERPRISE');
+CREATE TYPE "AnalysisStatus" AS ENUM ('PENDING', 'RUNNING', 'DONE', 'FAILED', 'NO_DOCUMENTS');
 
 -- CreateEnum
 CREATE TYPE "FonteEnum" AS ENUM ('PNCP', 'COMPRASNET');
@@ -8,35 +8,34 @@ CREATE TYPE "FonteEnum" AS ENUM ('PNCP', 'COMPRASNET');
 CREATE TYPE "ModalidadeEnum" AS ENUM ('PREGAO_ELETRONICO', 'PREGAO_PRESENCIAL', 'CONCORRENCIA', 'DISPENSA_COM_DISPUTA', 'DISPENSA_SEM_DISPUTA', 'INEXIGIBILIDADE', 'CONVITE', 'TOMADA_DE_PRECOS', 'CONCURSO', 'CREDENCIAMENTO', 'DIALOGO_COMPETITIVO', 'OUTROS');
 
 -- CreateEnum
-CREATE TYPE "SituacaoEnum" AS ENUM ('ABERTA', 'ENCERRADA', 'SUSPENSA', 'CANCELADA', 'ANULADA', 'HOMOLOGADA', 'REVOGADA');
+CREATE TYPE "NotificationTypeEnum" AS ENUM ('EMAIL', 'PUSH', 'IN_APP');
 
 -- CreateEnum
 CREATE TYPE "ParticipationStatusEnum" AS ENUM ('AVALIANDO', 'VOU_PARTICIPAR', 'NAO_VOU_PARTICIPAR', 'PARTICIPEI');
 
 -- CreateEnum
-CREATE TYPE "AnalysisStatus" AS ENUM ('PENDING', 'RUNNING', 'DONE', 'FAILED', 'NO_DOCUMENTS', 'DISABLED');
+CREATE TYPE "Plan" AS ENUM ('FREE', 'PRO', 'ENTERPRISE');
 
 -- CreateEnum
-CREATE TYPE "NotificationTypeEnum" AS ENUM ('EMAIL', 'PUSH', 'IN_APP');
+CREATE TYPE "SituacaoEnum" AS ENUM ('ABERTA', 'ENCERRADA', 'SUSPENSA', 'CANCELADA', 'ANULADA', 'HOMOLOGADA', 'REVOGADA');
 
 -- CreateEnum
 CREATE TYPE "WorkerStatus" AS ENUM ('RUNNING', 'SUCCESS', 'FAILED', 'PARTIAL');
 
 -- CreateTable
-CREATE TABLE "users" (
+CREATE TABLE "company_documents" (
     "id" TEXT NOT NULL,
-    "email" TEXT NOT NULL,
-    "name" TEXT,
-    "password_hash" TEXT,
-    "is_admin" BOOLEAN NOT NULL DEFAULT false,
-    "access_expires_at" TIMESTAMP(3),
-    "plan" "Plan" NOT NULL DEFAULT 'FREE',
-    "active" BOOLEAN NOT NULL DEFAULT true,
-    "token_version" INTEGER NOT NULL DEFAULT 0,
+    "user_id" TEXT NOT NULL,
+    "tipo" TEXT,
+    "nome" TEXT NOT NULL,
+    "data_emissao" TIMESTAMP(3),
+    "data_validade" TIMESTAMP(3),
+    "observacao" TEXT,
+    "last_alerted_at" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "users_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "company_documents_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -52,7 +51,6 @@ CREATE TABLE "monitored_items" (
     "valor_max" DECIMAL(65,30),
     "modalidades" TEXT[],
     "orgaos" TEXT[],
-    "uasg_codes" TEXT[],
     "active" BOOLEAN NOT NULL DEFAULT true,
     "raio_km" INTEGER,
     "origem_municipio" TEXT,
@@ -61,8 +59,94 @@ CREATE TABLE "monitored_items" (
     "origem_lng" DOUBLE PRECISION,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
+    "uasg_codes" TEXT[],
 
     CONSTRAINT "monitored_items_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "notifications" (
+    "id" TEXT NOT NULL,
+    "user_id" TEXT NOT NULL,
+    "type" "NotificationTypeEnum" NOT NULL,
+    "title" TEXT NOT NULL,
+    "body" TEXT NOT NULL,
+    "metadata" JSONB,
+    "sent_at" TIMESTAMP(3),
+    "read_at" TIMESTAMP(3),
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "notifications_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "tender_analyses" (
+    "id" TEXT NOT NULL,
+    "tender_id" TEXT NOT NULL,
+    "status" "AnalysisStatus" NOT NULL DEFAULT 'PENDING',
+    "documento_nome" TEXT,
+    "resultado" JSONB,
+    "error_msg" TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "tender_analyses_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "tender_checklists" (
+    "id" TEXT NOT NULL,
+    "user_id" TEXT NOT NULL,
+    "tender_id" TEXT NOT NULL,
+    "items" JSONB NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "tender_checklists_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "tender_items" (
+    "id" TEXT NOT NULL,
+    "tender_id" TEXT NOT NULL,
+    "numero_item" INTEGER,
+    "descricao" TEXT NOT NULL,
+    "catmat_code" TEXT,
+    "catser_code" TEXT,
+    "unidade_medida" TEXT,
+    "quantidade" DECIMAL(65,30),
+    "valor_unitario" DECIMAL(65,30),
+    "valor_total" DECIMAL(65,30),
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "tender_items_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "tender_matches" (
+    "id" TEXT NOT NULL,
+    "tender_id" TEXT NOT NULL,
+    "monitored_item_id" TEXT NOT NULL,
+    "user_id" TEXT NOT NULL,
+    "score" DOUBLE PRECISION NOT NULL,
+    "matched_keywords" TEXT[],
+    "read" BOOLEAN NOT NULL DEFAULT false,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "tender_matches_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "tender_participation_plans" (
+    "id" TEXT NOT NULL,
+    "user_id" TEXT NOT NULL,
+    "tender_id" TEXT NOT NULL,
+    "status" "ParticipationStatusEnum" NOT NULL DEFAULT 'AVALIANDO',
+    "state" JSONB NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "tender_participation_plans_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -93,8 +177,6 @@ CREATE TABLE "tenders" (
     "link_edital" TEXT,
     "numero_controle" TEXT,
     "raw_json" JSONB NOT NULL,
-    "content_hash" TEXT,
-    "situacao_checked_at" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
@@ -119,105 +201,19 @@ CREATE TABLE "uasgs" (
 );
 
 -- CreateTable
-CREATE TABLE "tender_items" (
+CREATE TABLE "users" (
     "id" TEXT NOT NULL,
-    "tender_id" TEXT NOT NULL,
-    "numero_item" INTEGER,
-    "descricao" TEXT NOT NULL,
-    "descricao_norm" TEXT,
-    "catmat_code" TEXT,
-    "catser_code" TEXT,
-    "unidade_medida" TEXT,
-    "quantidade" DECIMAL(65,30),
-    "valor_unitario" DECIMAL(65,30),
-    "valor_total" DECIMAL(65,30),
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "tender_items_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "tender_matches" (
-    "id" TEXT NOT NULL,
-    "tender_id" TEXT NOT NULL,
-    "monitored_item_id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
-    "score" DOUBLE PRECISION NOT NULL,
-    "matched_keywords" TEXT[],
-    "read" BOOLEAN NOT NULL DEFAULT false,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "tender_matches_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "tender_checklists" (
-    "id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
-    "tender_id" TEXT NOT NULL,
-    "items" JSONB NOT NULL,
+    "email" TEXT NOT NULL,
+    "name" TEXT,
+    "password_hash" TEXT,
+    "is_admin" BOOLEAN NOT NULL DEFAULT false,
+    "access_expires_at" TIMESTAMP(3),
+    "plan" "Plan" NOT NULL DEFAULT 'FREE',
+    "active" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "tender_checklists_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "tender_participation_plans" (
-    "id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
-    "tender_id" TEXT NOT NULL,
-    "status" "ParticipationStatusEnum" NOT NULL DEFAULT 'AVALIANDO',
-    "state" JSONB NOT NULL,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "tender_participation_plans_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "company_documents" (
-    "id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
-    "tipo" TEXT,
-    "nome" TEXT NOT NULL,
-    "data_emissao" TIMESTAMP(3),
-    "data_validade" TIMESTAMP(3),
-    "observacao" TEXT,
-    "last_alerted_at" TIMESTAMP(3),
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "company_documents_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "tender_analyses" (
-    "id" TEXT NOT NULL,
-    "tender_id" TEXT NOT NULL,
-    "status" "AnalysisStatus" NOT NULL DEFAULT 'PENDING',
-    "documento_nome" TEXT,
-    "resultado" JSONB,
-    "error_msg" TEXT,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "tender_analyses_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "notifications" (
-    "id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
-    "type" "NotificationTypeEnum" NOT NULL,
-    "title" TEXT NOT NULL,
-    "body" TEXT NOT NULL,
-    "metadata" JSONB,
-    "sent_at" TIMESTAMP(3),
-    "read_at" TIMESTAMP(3),
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "notifications_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "users_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -229,7 +225,6 @@ CREATE TABLE "worker_logs" (
     "total_fetched" INTEGER,
     "total_new" INTEGER,
     "total_dupes" INTEGER,
-    "total_updated" INTEGER,
     "error_msg" TEXT,
     "started_at" TIMESTAMP(3) NOT NULL,
     "finished_at" TIMESTAMP(3),
@@ -239,122 +234,116 @@ CREATE TABLE "worker_logs" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
+CREATE INDEX "company_documents_tipo_idx" ON "company_documents"("tipo" ASC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tenders_fonte_id_key" ON "tenders"("fonte_id");
+CREATE INDEX "company_documents_user_id_idx" ON "company_documents"("user_id" ASC);
 
 -- CreateIndex
-CREATE INDEX "tenders_fonte_idx" ON "tenders"("fonte");
+CREATE INDEX "notifications_user_id_idx" ON "notifications"("user_id" ASC);
 
 -- CreateIndex
-CREATE INDEX "tenders_uf_idx" ON "tenders"("uf");
+CREATE UNIQUE INDEX "tender_analyses_tender_id_key" ON "tender_analyses"("tender_id" ASC);
 
 -- CreateIndex
-CREATE INDEX "tenders_modalidade_idx" ON "tenders"("modalidade");
+CREATE UNIQUE INDEX "tender_checklists_user_id_tender_id_key" ON "tender_checklists"("user_id" ASC, "tender_id" ASC);
 
 -- CreateIndex
-CREATE INDEX "tenders_situacao_idx" ON "tenders"("situacao");
+CREATE INDEX "tender_items_catmat_code_idx" ON "tender_items"("catmat_code" ASC);
 
 -- CreateIndex
-CREATE INDEX "tenders_abertura_at_idx" ON "tenders"("abertura_at");
+CREATE INDEX "tender_items_tender_id_idx" ON "tender_items"("tender_id" ASC);
 
 -- CreateIndex
-CREATE INDEX "tenders_publicado_at_idx" ON "tenders"("publicado_at");
+CREATE INDEX "tender_matches_created_at_idx" ON "tender_matches"("created_at" ASC);
 
 -- CreateIndex
-CREATE INDEX "tenders_situacao_checked_at_idx" ON "tenders"("situacao_checked_at");
+CREATE INDEX "tender_matches_read_idx" ON "tender_matches"("read" ASC);
 
 -- CreateIndex
-CREATE INDEX "tenders_encerramento_at_idx" ON "tenders"("encerramento_at");
+CREATE UNIQUE INDEX "tender_matches_tender_id_monitored_item_id_key" ON "tender_matches"("tender_id" ASC, "monitored_item_id" ASC);
 
 -- CreateIndex
-CREATE INDEX "uasgs_nome_uasg_norm_idx" ON "uasgs"("nome_uasg_norm");
+CREATE INDEX "tender_matches_user_id_idx" ON "tender_matches"("user_id" ASC);
 
 -- CreateIndex
-CREATE INDEX "uasgs_nome_orgao_norm_idx" ON "uasgs"("nome_orgao_norm");
+CREATE UNIQUE INDEX "tender_participation_plans_user_id_tender_id_key" ON "tender_participation_plans"("user_id" ASC, "tender_id" ASC);
 
 -- CreateIndex
-CREATE INDEX "uasgs_sigla_uf_idx" ON "uasgs"("sigla_uf");
+CREATE INDEX "tenders_abertura_at_idx" ON "tenders"("abertura_at" ASC);
 
 -- CreateIndex
-CREATE INDEX "tender_items_tender_id_idx" ON "tender_items"("tender_id");
+CREATE UNIQUE INDEX "tenders_fonte_id_key" ON "tenders"("fonte_id" ASC);
 
 -- CreateIndex
-CREATE INDEX "tender_items_catmat_code_idx" ON "tender_items"("catmat_code");
+CREATE INDEX "tenders_fonte_idx" ON "tenders"("fonte" ASC);
 
 -- CreateIndex
-CREATE INDEX "tender_matches_user_id_idx" ON "tender_matches"("user_id");
+CREATE INDEX "tenders_modalidade_idx" ON "tenders"("modalidade" ASC);
 
 -- CreateIndex
-CREATE INDEX "tender_matches_read_idx" ON "tender_matches"("read");
+CREATE INDEX "tenders_publicado_at_idx" ON "tenders"("publicado_at" ASC);
 
 -- CreateIndex
-CREATE INDEX "tender_matches_created_at_idx" ON "tender_matches"("created_at");
+CREATE INDEX "tenders_situacao_idx" ON "tenders"("situacao" ASC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tender_matches_tender_id_monitored_item_id_key" ON "tender_matches"("tender_id", "monitored_item_id");
+CREATE INDEX "tenders_uf_idx" ON "tenders"("uf" ASC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tender_checklists_user_id_tender_id_key" ON "tender_checklists"("user_id", "tender_id");
+CREATE INDEX "uasgs_nome_orgao_norm_idx" ON "uasgs"("nome_orgao_norm" ASC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tender_participation_plans_user_id_tender_id_key" ON "tender_participation_plans"("user_id", "tender_id");
+CREATE INDEX "uasgs_nome_uasg_norm_idx" ON "uasgs"("nome_uasg_norm" ASC);
 
 -- CreateIndex
-CREATE INDEX "company_documents_user_id_idx" ON "company_documents"("user_id");
+CREATE INDEX "uasgs_sigla_uf_idx" ON "uasgs"("sigla_uf" ASC);
 
 -- CreateIndex
-CREATE INDEX "company_documents_tipo_idx" ON "company_documents"("tipo");
+CREATE UNIQUE INDEX "users_email_key" ON "users"("email" ASC);
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tender_analyses_tender_id_key" ON "tender_analyses"("tender_id");
+CREATE INDEX "worker_logs_created_at_idx" ON "worker_logs"("created_at" ASC);
 
 -- CreateIndex
-CREATE INDEX "notifications_user_id_idx" ON "notifications"("user_id");
+CREATE INDEX "worker_logs_status_idx" ON "worker_logs"("status" ASC);
 
 -- CreateIndex
-CREATE INDEX "worker_logs_worker_idx" ON "worker_logs"("worker");
-
--- CreateIndex
-CREATE INDEX "worker_logs_status_idx" ON "worker_logs"("status");
-
--- CreateIndex
-CREATE INDEX "worker_logs_created_at_idx" ON "worker_logs"("created_at");
-
--- AddForeignKey
-ALTER TABLE "monitored_items" ADD CONSTRAINT "monitored_items_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "tender_items" ADD CONSTRAINT "tender_items_tender_id_fkey" FOREIGN KEY ("tender_id") REFERENCES "tenders"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "tender_matches" ADD CONSTRAINT "tender_matches_tender_id_fkey" FOREIGN KEY ("tender_id") REFERENCES "tenders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "tender_matches" ADD CONSTRAINT "tender_matches_monitored_item_id_fkey" FOREIGN KEY ("monitored_item_id") REFERENCES "monitored_items"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "tender_matches" ADD CONSTRAINT "tender_matches_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "tender_checklists" ADD CONSTRAINT "tender_checklists_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "tender_checklists" ADD CONSTRAINT "tender_checklists_tender_id_fkey" FOREIGN KEY ("tender_id") REFERENCES "tenders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "tender_participation_plans" ADD CONSTRAINT "tender_participation_plans_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "tender_participation_plans" ADD CONSTRAINT "tender_participation_plans_tender_id_fkey" FOREIGN KEY ("tender_id") REFERENCES "tenders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+CREATE INDEX "worker_logs_worker_idx" ON "worker_logs"("worker" ASC);
 
 -- AddForeignKey
 ALTER TABLE "company_documents" ADD CONSTRAINT "company_documents_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "tender_analyses" ADD CONSTRAINT "tender_analyses_tender_id_fkey" FOREIGN KEY ("tender_id") REFERENCES "tenders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "monitored_items" ADD CONSTRAINT "monitored_items_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "tender_analyses" ADD CONSTRAINT "tender_analyses_tender_id_fkey" FOREIGN KEY ("tender_id") REFERENCES "tenders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "tender_checklists" ADD CONSTRAINT "tender_checklists_tender_id_fkey" FOREIGN KEY ("tender_id") REFERENCES "tenders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "tender_checklists" ADD CONSTRAINT "tender_checklists_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "tender_items" ADD CONSTRAINT "tender_items_tender_id_fkey" FOREIGN KEY ("tender_id") REFERENCES "tenders"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "tender_matches" ADD CONSTRAINT "tender_matches_monitored_item_id_fkey" FOREIGN KEY ("monitored_item_id") REFERENCES "monitored_items"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "tender_matches" ADD CONSTRAINT "tender_matches_tender_id_fkey" FOREIGN KEY ("tender_id") REFERENCES "tenders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "tender_matches" ADD CONSTRAINT "tender_matches_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "tender_participation_plans" ADD CONSTRAINT "tender_participation_plans_tender_id_fkey" FOREIGN KEY ("tender_id") REFERENCES "tenders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "tender_participation_plans" ADD CONSTRAINT "tender_participation_plans_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

@@ -63,6 +63,19 @@ gerado a partir do schema real.
 
 ---
 
+## AVISO — nunca rode `prisma migrate dev` neste projeto
+
+Os índices GIN de trigrama (`gin_trgm_ops`) não são expressáveis no schema do
+Prisma, então eles vivem apenas no SQL da migration `00000000000002_busca_trigram`.
+
+Consequência: `prisma migrate dev` enxerga esses índices como "sobrando" no banco
+e gera uma migration que os **APAGA**. Isso derruba o desempenho da busca de volta
+ao sequential scan, silenciosamente.
+
+Em produção use sempre `migrate deploy` (é o que o `migrar:producao` faz).
+
+---
+
 ## 2. Aplicar em produção (uma vez)
 
 O banco de produção **já tem** as tabelas do baseline — ele só nunca soube disso.
