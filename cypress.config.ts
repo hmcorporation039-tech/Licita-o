@@ -60,6 +60,40 @@ export default defineConfig({
             },
           })
 
+          // Licitações de enchimento, só pra paginação. O teste de paginação
+          // pede uma página cheia de 5 itens, e com um fixture só ele passava
+          // por acidente — apenas quando o banco já tinha coleta real dentro.
+          // Nenhuma contém "notebook", então não interferem no matching.
+          const enchimento = [
+            'Contratação de serviço de manutenção predial',
+            'Registro de preços para material de expediente',
+            'Aquisição de gêneros alimentícios para merenda escolar',
+            'Contratação de empresa para coleta de resíduos sólidos',
+            'Serviço de vigilância patrimonial armada',
+            'Locação de veículos para a frota municipal',
+          ]
+
+          for (const [i, texto] of enchimento.entries()) {
+            const objetoEnchimento = `${texto} — fixture de paginação (Cypress)`
+            await prisma.tender.upsert({
+              where: { fonteId: `CYPRESS-FIXTURE-PAGINACAO-${i}` },
+              update: { objeto: objetoEnchimento, objetoNorm: normalize(objetoEnchimento) },
+              create: {
+                fonte: 'PNCP',
+                fonteId: `CYPRESS-FIXTURE-PAGINACAO-${i}`,
+                modalidade: 'PREGAO_ELETRONICO',
+                objeto: objetoEnchimento,
+                objetoNorm: normalize(objetoEnchimento),
+                uf: 'SP',
+                municipio: 'São Paulo',
+                orgao: 'ÓRGÃO DE TESTE CYPRESS',
+                orgaoCnpj: '00000000000000',
+                publicadoAt: new Date(Date.now() - (i + 1) * 60_000),
+                rawJson: { fixture: true },
+              },
+            })
+          }
+
           await prisma.$disconnect()
           return null
         },
