@@ -28,17 +28,25 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 
 export interface SessionTokenPayload {
   userId: string
+  // Confrontado com User.tokenVersion no authMiddleware. Tokens emitidos antes
+  // desse campo existir vêm sem ele e são tratados como versão 0.
+  tokenVersion: number
 }
 
-export function signSessionToken(userId: string): string {
-  return jwt.sign({ userId } satisfies SessionTokenPayload, getJwtSecret(), { expiresIn: SESSION_DURATION })
+export function signSessionToken(userId: string, tokenVersion: number): string {
+  return jwt.sign({ userId, tokenVersion } satisfies SessionTokenPayload, getJwtSecret(), {
+    expiresIn: SESSION_DURATION,
+  })
 }
 
 export function verifySessionToken(token: string): SessionTokenPayload | null {
   try {
     const decoded = jwt.verify(token, getJwtSecret())
     if (typeof decoded === 'object' && decoded && typeof decoded.userId === 'string') {
-      return { userId: decoded.userId }
+      return {
+        userId: decoded.userId,
+        tokenVersion: typeof decoded.tokenVersion === 'number' ? decoded.tokenVersion : 0,
+      }
     }
     return null
   } catch {

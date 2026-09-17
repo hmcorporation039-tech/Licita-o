@@ -5,7 +5,14 @@
 // ============================================================
 
 import { GoogleGenAI } from '@google/genai'
-import { ANALYSIS_SCHEMA, AnalysisRefusedError, buildUserContent, EditalAnalysisResult, SYSTEM_PROMPT } from './types'
+import {
+  ANALYSIS_SCHEMA,
+  AnalysisRefusedError,
+  EditalAnalysisResult,
+  EditalDocumento,
+  SYSTEM_PROMPT,
+  buildInstrucao,
+} from './types'
 
 let client: GoogleGenAI | null = null
 function getClient(): GoogleGenAI {
@@ -13,10 +20,22 @@ function getClient(): GoogleGenAI {
   return client
 }
 
-export async function analyzeEdital(objeto: string, text: string): Promise<EditalAnalysisResult> {
+export async function analyzeEdital(
+  objeto: string,
+  documentos: EditalDocumento[]
+): Promise<EditalAnalysisResult> {
+  const partes = [
+    ...documentos.map((doc) =>
+      doc.tipo === 'pdf'
+        ? { inlineData: { mimeType: 'application/pdf', data: doc.data.toString('base64') } }
+        : { text: `--- ${doc.nome} ---\n\n${doc.texto}` }
+    ),
+    { text: buildInstrucao(objeto, documentos) },
+  ]
+
   const response = await getClient().models.generateContent({
     model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
-    contents: buildUserContent(objeto, text),
+    contents: [{ role: 'user', parts: partes }],
     config: {
       systemInstruction: SYSTEM_PROMPT,
       responseMimeType: 'application/json',

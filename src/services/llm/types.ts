@@ -78,8 +78,31 @@ Extraia:
 
 Seja específico e cite trechos do edital quando relevante. Não invente informação que não está no texto.`
 
-export function buildUserContent(objeto: string, text: string): string {
-  return `Objeto da licitação (conforme cadastro no PNCP): ${objeto}\n\n--- TEXTO DO EDITAL ---\n\n${text}`
+// Modo híbrido. Nenhum dos dois é truncado: a habilitação e a qualificação
+// técnica ficam no FIM do edital, que era exatamente o pedaço descartado pelo
+// limite de 200.000 caracteres anterior.
+//
+// 'texto' — edital com camada de texto. Barato, é o caminho da maioria.
+// 'pdf'   — edital escaneado (foto de papel), que não tem texto para extrair.
+//           O modelo lê a página como imagem. Custa mais token, e por isso só
+//           é usado quando o texto não veio. Antes esses casos simplesmente
+//           falhavam com "não foi possível extrair texto do documento".
+export type EditalDocumento =
+  | { nome: string; tipo: 'texto'; texto: string }
+  | { nome: string; tipo: 'pdf'; data: Buffer }
+
+export type EditalAnalyzer = (objeto: string, documentos: EditalDocumento[]) => Promise<EditalAnalysisResult>
+
+export function buildInstrucao(objeto: string, documentos: EditalDocumento[]): string {
+  const lista = documentos.map((d, i) => `${i + 1}. ${d.nome}`).join('\n')
+  return [
+    `Objeto da licitação (conforme cadastro no PNCP): ${objeto}`,
+    '',
+    'Documentos anexados, na ordem em que aparecem:',
+    lista,
+    '',
+    'Analise o conjunto completo. O Termo de Referência e os anexos costumam trazer as exigências técnicas e os documentos de habilitação que não estão no corpo do edital.',
+  ].join('\n')
 }
 
 // Erro específico pra quando o próprio modelo recusa a análise (filtro de

@@ -45,6 +45,8 @@ Edite o `.env` e preencha:
 | `REDIS_URL` | Dashboard Upstash → seu banco → `rediss://...` |
 | `JWT_SECRET` | Gere com `node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"` |
 | `RESEND_API_KEY` | [resend.com](https://resend.com) — opcional, sem ela os e-mails só ficam registrados sem enviar |
+| `CORS_ORIGINS` | Origens do frontend separadas por vírgula. **Obrigatória em produção** — vazia lá, nenhum navegador é aceito |
+| `AI_ANALYSIS_ENABLED` | `"false"` (padrão) desliga a análise por IA por completo: **nenhuma chamada de API, nenhum crédito gasto** |
 | `AI_PROVIDER` | `"claude"` ou `"gemini"` — controla qual IA analisa os editais |
 | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) — necessária se `AI_PROVIDER="claude"` |
 | `GEMINI_API_KEY` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — gratuita, necessária se `AI_PROVIDER="gemini"` |
@@ -54,9 +56,16 @@ Edite o `.env` e preencha:
 ## 4. Configurar o banco de dados
 
 ```bash
-npm run db:generate   # gera o Prisma Client
-npm run db:push       # aplica o schema no banco (cria as tabelas)
+npm run db:generate       # gera o Prisma Client
+npm run db:migrate:deploy # aplica as migrations (cria as tabelas)
 ```
+
+> **Migrando um banco que já existe (v1.0):** leia o [`MIGRACAO.md`](MIGRACAO.md)
+> antes. O banco de produção precisa de um `prisma migrate resolve --applied`
+> uma única vez, senão o deploy tenta recriar tabelas que já existem.
+>
+> `prisma db push` não é mais parte do fluxo (ficou como `db:push:danger`): era
+> ele que deixava o histórico de migrations defasado em 5 tabelas.
 
 ---
 
@@ -87,7 +96,22 @@ npm run dev            # http://localhost:3000
 
 ---
 
-## 7. Rodar os testes de ponta a ponta
+## 7. Rodar os testes
+
+```bash
+npm run verify   # typecheck + lint + testes unitários
+```
+
+Os testes unitários (Vitest) cobrem só função pura — matcher, parsers, geo, hash,
+escape de HTML. **Não tocam banco, rede nem API de IA**, então rodam offline e não
+gastam crédito nenhum. É a mesma coisa que o CI roda, sem nenhum segredo configurado.
+
+```bash
+npm run test         # só os unitários
+npm run test:watch   # em modo watch
+```
+
+E os de ponta a ponta, que precisam de banco e da API no ar:
 
 ```bash
 npm run test:e2e
@@ -145,3 +169,12 @@ licitacao-platform/
 | PNCP | `https://pncp.gov.br/api/consulta` | Pública |
 | ComprasNet | `https://dadosabertos.compras.gov.br` | Pública |
 | CATMAT/CATSER | `https://compras.dados.gov.br` | Pública |
+
+---
+
+## Documentos do projeto
+
+| Arquivo | O que tem |
+|---|---|
+| [`PROGRESSO.md`](PROGRESSO.md) | Fases, status de cada item e o que ainda não foi iniciado |
+| [`MIGRACAO.md`](MIGRACAO.md) | Runbook da migração v1.0 → v2.0, para executar contra produção |

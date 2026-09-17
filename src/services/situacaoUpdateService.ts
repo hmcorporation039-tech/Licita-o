@@ -36,6 +36,14 @@ interface PNCPCompraStatus {
   situacaoCompraId: number
 }
 
+// Teto por execução: antes a varredura pegava TODAS as licitações não-terminais
+// e fazia uma requisição sequencial por registro sob o rate limit de 1,2s — com
+// 10 mil abertas isso passa de 3 horas, e como o intervalo é fixo em 12h a
+// rotina nunca terminava antes da próxima começar.
+export const SITUACAO_MAX_POR_EXECUCAO = Number(process.env.SITUACAO_MAX_POR_EXECUCAO ?? 500)
+
+let varreduraEmAndamento = false
+
 export async function refreshTenderSituacao(tenderId: string): Promise<boolean> {
   const tender = await prisma.tender.findUnique({
     where: { id: tenderId },
@@ -73,20 +81,47 @@ export async function refreshTenderSituacao(tenderId: string): Promise<boolean> 
 // terminal — chamada periodicamente pelo worker (ver workers/index.ts).
 // Não usa fila do BullMQ de propósito: é uma varredura simples e o Redis
 // já está no limite do plano gratuito (ver README/histórico do projeto).
-export async function refreshAllOpenSituacoes(): Promise<{ checked: number; updated: number }> {
-  const tenders = await prisma.tender.findMany({
-    where: { fonte: 'PNCP', situacao: { notIn: TERMINAL } },
-    select: { id: true },
-  })
-
-  let updated = 0
-  for (const t of tenders) {
-    try {
-      if (await refreshTenderSituacao(t.id)) updated++
-    } catch (err) {
-      console.error(`[SituaçãoUpdate] Erro ao atualizar tender ${t.id}:`, err instanceof Error ? err.message : err)
-    }
+export async function refreshAllOpenSituacoes(): Promise<{
+  checked: number
+  updated: number
+  skipped: boolean
+}> {
+  // Sem essa trava, uma varredura longa e a próxima execução do intervalo
+  // passam a rodar em paralelo e brigam pelo mesmo rate limit.
+  if (varreduraEmAndamento) {
+    console.warn('[SituaçãoUpdate] Varredura anterior ainda em andamento — pulando esta execução.')
+    return { checked: 0, updated: 0, skipped: true }
   }
+  varreduraEmAndamento = true
 
-  return { checked: tenders.length, updated }
+  try {
+    // Rodízio: quem nunca foi conferido vem primeiro, depois quem foi conferido
+    // há mais tempo; dentro disso, quem encerra antes. Assim cada execução
+    // avança num pedaço diferente da base em vez de recomeçar do zero.
+    const tenders = await prisma.tender.findMany({
+      where: { fonte: 'PNCP', situacao: { notIn: TERMINAL } },
+      select: { id: true },
+      orderBy: [{ situacaoCheckedAt: { sort: 'asc', nulls: 'first' } }, { encerramentoAt: 'asc' }],
+      take: SITUACAO_MAX_POR_EXECUCAO,
+    })
+
+    let updated = 0
+    for (const t of tenders) {
+      try {
+        if (await refreshTenderSituacao(t.id)) updated++
+      } catch (err) {
+        console.error(`[SituaçãoUpdate] Erro ao atualizar tender ${t.id}:`, err instanceof Error ? err.message : err)
+      } finally {
+        // Marca mesmo quando a consulta falha, senão o mesmo registro problemático
+        // seria escolhido de novo em toda execução e travaria o rodízio.
+        await prisma.tender
+          .update({ where: { id: t.id }, data: { situacaoCheckedAt: new Date() } })
+          .catch(() => undefined)
+      }
+    }
+
+    return { checked: tenders.length, updated, skipped: false }
+  } finally {
+    varreduraEmAndamento = false
+  }
 }

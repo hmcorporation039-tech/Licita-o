@@ -4,11 +4,12 @@
 // ============================================================
 
 import 'dotenv/config'
-import { scheduleColetorJobs } from '../queues'
+import { dispararColetaInicial, scheduleColetorJobs } from '../queues'
 import { startColetorPNCPWorker } from './coletorPNCP'
 import { startColetorComprasnetWorker } from './coletorComprasnet'
 import { startMatcherWorker } from './matcher'
 import { startNotificadorWorker } from './notificador'
+import { startAnaliseWorker } from './analise'
 import { refreshAllOpenSituacoes } from '../services/situacaoUpdateService'
 import { cleanupOldUnmatchedTenders } from '../services/retentionService'
 import { checkExpiringDocuments } from '../services/documentAlertService'
@@ -21,8 +22,9 @@ async function main() {
   const workerComprasnet = startColetorComprasnetWorker()
   const workerMatcher = startMatcherWorker()
   const workerNotificador = startNotificadorWorker()
+  const workerAnalise = startAnaliseWorker()
 
-  console.log('✅ Workers ativos: PNCP, ComprasNet, Matcher, Notificador')
+  console.log('✅ Workers ativos: PNCP, ComprasNet, Matcher, Notificador, Análise')
 
   // Agenda coletas periódicas — envolvido em try/catch de propósito: isso
   // roda toda vez que o processo sobe, então se o Redis estiver indisponível
@@ -32,27 +34,9 @@ async function main() {
   // aconteceu e inundou os logs do serviço).
   try {
     await scheduleColetorJobs()
+    await dispararColetaInicial()
 
-    // Dispara uma coleta imediata ao iniciar (backfill dos últimos 2 dias)
-    const { coletorPNCPQueue, coletorComprasnetQueue } = await import('../queues')
-    const today = new Date()
-    const twoDaysAgo = new Date()
-    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2)
-    const fmt = (d: Date) => d.toISOString().split('T')[0]
-
-    await coletorPNCPQueue.add('coleta-pncp-inicial', {
-      fonte: 'PNCP',
-      dataInicial: fmt(twoDaysAgo),
-      dataFinal: fmt(today),
-    })
-
-    await coletorComprasnetQueue.add('coleta-comprasnet-inicial', {
-      fonte: 'COMPRASNET',
-      dataInicial: fmt(twoDaysAgo),
-      dataFinal: fmt(today),
-    })
-
-    console.log('📥 Coleta inicial disparada (últimos 2 dias).')
+    console.log('📥 Coleta inicial disparada.')
   } catch (err) {
     console.error('[Startup] Erro ao agendar jobs de coleta (Redis indisponível?) — workers seguem no ar:', err)
   }
@@ -108,6 +92,7 @@ async function main() {
     await workerComprasnet.close()
     await workerMatcher.close()
     await workerNotificador.close()
+    await workerAnalise.close()
     process.exit(0)
   })
 }

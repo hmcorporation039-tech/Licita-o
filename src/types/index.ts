@@ -94,10 +94,13 @@ export interface NormalizedTenderItem {
 }
 
 // Payload dos jobs da fila
+// dataInicial/dataFinal são opcionais de propósito: o agendador periódico não
+// as envia (senão ficariam congeladas na primeira execução) e o worker resolve
+// a janela no momento da execução. Só backfill manual e testes as informam.
 export interface ColetorJobPayload {
   fonte: FonteEnum
-  dataInicial: string  // 'YYYY-MM-DD'
-  dataFinal: string
+  dataInicial?: string  // 'YYYY-MM-DD'
+  dataFinal?: string
   uf?: string
   pagina?: number
   modalidadeCodigo?: number
@@ -107,6 +110,22 @@ export interface MatcherJobPayload {
   tenderId: string
 }
 
-export interface NotificadorJobPayload {
+export interface AnaliseJobPayload {
+  tenderId: string
+}
+
+// Jobs de match antigos, já enfileirados no Redis, não têm o campo `tipo` —
+// o worker discrimina pela presença de tenderMatchId, não por ele.
+export interface NotificadorMatchPayload {
+  tipo?: 'match'
   tenderMatchId: string
 }
+
+export interface NotificadorAlteracaoPayload {
+  tipo: 'alteracao'
+  tenderId: string
+  userId: string
+  campos: string[]
+}
+
+export type NotificadorJobPayload = NotificadorMatchPayload | NotificadorAlteracaoPayload

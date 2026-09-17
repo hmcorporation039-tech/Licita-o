@@ -168,7 +168,7 @@ export interface ParticipationPlanListItem {
   tender: Tender
 }
 
-export type AnalysisStatus = 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED' | 'NO_DOCUMENTS'
+export type AnalysisStatus = 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED' | 'NO_DOCUMENTS' | 'DISABLED'
 
 export interface AnalysisRisco {
   titulo: string

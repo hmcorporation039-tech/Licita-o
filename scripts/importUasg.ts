@@ -32,7 +32,6 @@ interface UasgRow {
 async function fetchAllPages<T>(path: string, params: Record<string, string>): Promise<T[]> {
   const all: T[] = []
   let pagina = 1
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const { data } = await axios.get(`${BASE_URL}${path}`, { params: { ...params, pagina }, timeout: 30_000 })
     all.push(...(data.resultado ?? []))

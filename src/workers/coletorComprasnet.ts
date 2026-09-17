@@ -9,7 +9,12 @@ import { Worker, Job } from 'bullmq'
 import { redisConnection, matcherQueue } from '../queues'
 import { comprasnetClient } from '../lib/httpClient'
 import { parseComprasnetTender, parseComprasnetDispensa } from '../services/comprasnetParser'
-import { saveTender, saveWorkerLog } from '../services/tenderService'
+import { prisma, saveTender, saveWorkerLog } from '../services/tenderService'
+import { findMunicipioByNomeUf } from '../lib/geoService'
+import { enfileirarSemTravar } from '../queues/enfileirar'
+import { resolveColetaWindow } from '../lib/coletaWindow'
+import { ultimaPublicacaoColetada } from '../services/coletaCursorService'
+import { avisarAlteracaoDeTender } from '../services/tenderChangeService'
 import { ColetorJobPayload, NormalizedTender } from '../types'
 
 // A API exige tamanhoPagina entre 10 e 500
@@ -28,35 +33,84 @@ async function fetchPaginated(endpoint: string, params: Record<string, any>, pag
   }
 }
 
+// O endpoint do módulo legado não devolve UF nem órgão — só o código da UASG.
+// Como o matcher trata UF como portão, quem filtra por estado (quase todo
+// mundo) nunca via nada do ComprasNet. A tabela Uasg já está no banco com UF,
+// órgão e município: basta cruzar antes de salvar.
+async function enriquecerComUasg(tenders: NormalizedTender[]): Promise<NormalizedTender[]> {
+  const codigos = Array.from(
+    new Set(tenders.map((t) => t.unidade).filter((u): u is string => Boolean(u)))
+  )
+  if (codigos.length === 0) return tenders
+
+  const uasgs = await prisma.uasg.findMany({
+    where: { codigoUasg: { in: codigos } },
+    select: { codigoUasg: true, nomeUasg: true, nomeOrgao: true, siglaUf: true, municipioNome: true },
+  })
+  if (uasgs.length === 0) return tenders
+
+  const porCodigo = new Map(uasgs.map((u) => [u.codigoUasg, u]))
+
+  return tenders.map((tender) => {
+    const uasg = tender.unidade ? porCodigo.get(tender.unidade) : undefined
+    if (!uasg) return tender
+
+    const uf = tender.uf ?? uasg.siglaUf ?? undefined
+    const municipio = tender.municipio ?? uasg.municipioNome ?? undefined
+    const geo = municipio && uf ? findMunicipioByNomeUf(municipio, uf) : undefined
+
+    return {
+      ...tender,
+      uf,
+      municipio,
+      municipioIbge: tender.municipioIbge ?? geo?.codigoIbge,
+      municipioLat: tender.municipioLat ?? geo?.lat,
+      municipioLng: tender.municipioLng ?? geo?.lng,
+      orgao: tender.orgao ?? uasg.nomeOrgao ?? uasg.nomeUasg,
+    }
+  })
+}
+
 // Salva um lote de tenders já normalizados, retornando contadores
-async function saveAll(tenders: NormalizedTender[]): Promise<{ totalNew: number; totalDupes: number }> {
+async function saveAll(
+  tenders: NormalizedTender[]
+): Promise<{ totalNew: number; totalDupes: number; totalUpdated: number }> {
   let totalNew = 0
   let totalDupes = 0
-  for (const tender of tenders) {
+  let totalUpdated = 0
+  const enriquecidos = await enriquecerComUasg(tenders)
+  for (const tender of enriquecidos) {
     try {
       const result = await saveTender(tender)
       if (result.isNew) {
         totalNew++
-        await matcherQueue.add('match-tender', { tenderId: result.tenderId })
+        await enfileirarSemTravar(matcherQueue, 'match-tender', { tenderId: result.tenderId }, 'ComprasNet Worker')
       } else {
         totalDupes++
+        if (result.changed) {
+          totalUpdated++
+          await avisarAlteracaoDeTender(result.tenderId, result.changedFields)
+        }
       }
     } catch (itemErr) {
       console.error('[ComprasNet Worker] Erro ao processar item:', itemErr)
     }
   }
-  return { totalNew, totalDupes }
+  return { totalNew, totalDupes, totalUpdated }
 }
 
 export function startColetorComprasnetWorker() {
   const worker = new Worker<ColetorJobPayload>(
     'coletor-comprasnet',
     async (job: Job<ColetorJobPayload>) => {
-      const { dataInicial, dataFinal } = job.data
+      const { dataInicial, dataFinal } = resolveColetaWindow(job.data, {
+        ultimaPublicacaoColetada: await ultimaPublicacaoColetada('COMPRASNET'),
+      })
       const startedAt = new Date()
       let totalFetched = 0
       let totalNew = 0
       let totalDupes = 0
+      let totalUpdated = 0
       let hadErrors = false
 
       console.log(`[ComprasNet Worker] Iniciando coleta ${dataInicial} → ${dataFinal}`)
@@ -77,6 +131,7 @@ export function startColetorComprasnetWorker() {
           const result = await saveAll(data.map(parseComprasnetTender))
           totalNew += result.totalNew
           totalDupes += result.totalDupes
+          totalUpdated += result.totalUpdated
           pagina++
         }
       } catch (err) {
@@ -113,6 +168,7 @@ export function startColetorComprasnetWorker() {
             const result = await saveAll(data.map(parseComprasnetDispensa))
             totalNew += result.totalNew
             totalDupes += result.totalDupes
+            totalUpdated += result.totalUpdated
             pagina++
           }
         }
@@ -128,13 +184,14 @@ export function startColetorComprasnetWorker() {
         totalFetched,
         totalNew,
         totalDupes,
+        totalUpdated,
         errorMsg: hadErrors ? 'Uma das fases (licitação/dispensa) falhou — ver logs do worker' : undefined,
         startedAt,
         finishedAt: new Date(),
       })
 
       console.log(
-        `[ComprasNet Worker] Concluído — coletados: ${totalFetched}, novos: ${totalNew}, dupes: ${totalDupes}${hadErrors ? ' (com falhas parciais)' : ''}`
+        `[ComprasNet Worker] Concluído — coletados: ${totalFetched}, novos: ${totalNew}, atualizados: ${totalUpdated}, inalterados: ${totalDupes - totalUpdated}${hadErrors ? ' (com falhas parciais)' : ''}`
       )
     },
     {

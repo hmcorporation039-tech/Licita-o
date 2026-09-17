@@ -6,6 +6,7 @@
 
 import { Worker, Job } from 'bullmq'
 import { redisConnection, notificadorQueue } from '../queues'
+import { enfileirarSemTravar } from '../queues/enfileirar'
 import { prisma } from '../services/tenderService'
 import { findMatchCandidates } from '../services/matcherService'
 import { MatcherJobPayload } from '../types'
@@ -47,11 +48,7 @@ export function startMatcherWorker() {
       // efeito colateral — se falhar (ex: cota do Redis estourada), os
       // matches já foram salvos e não devem virar retry do job inteiro.
       for (const match of created) {
-        try {
-          await notificadorQueue.add('notify-match', { tenderMatchId: match.id })
-        } catch (err) {
-          console.error('[Matcher Worker] Erro ao enfileirar notificação (match salvo normalmente):', err)
-        }
+        await enfileirarSemTravar(notificadorQueue, 'notify-match', { tenderMatchId: match.id }, 'Matcher Worker')
       }
 
       console.log(`[Matcher Worker] Tender ${tenderId} → ${created.length} novo(s) match(es).`)

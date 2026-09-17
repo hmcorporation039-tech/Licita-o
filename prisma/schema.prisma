@@ -30,6 +30,10 @@ model User {
   accessExpiresAt DateTime? @map("access_expires_at")
   plan      Plan     @default(FREE)
   active    Boolean  @default(true)
+  // Incrementado ao desativar a conta ou trocar a senha; vai dentro do token
+  // e e conferido no authMiddleware, para que a sessao de 30 dias possa ser
+  // revogada na hora em vez de sobreviver ate expirar sozinha.
+  tokenVersion Int   @default(0) @map("token_version")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -126,6 +130,13 @@ model Tender {
   linkEdital      String?       @map("link_edital")
   numeroControle  String?       @map("numero_controle")
   rawJson         Json          @map("raw_json")
+  // Impressao digital dos campos que importam (ver lib/tenderContentHash.ts).
+  // Orgaos republicam licitacao o tempo todo; comparar o hash deixa a coleta
+  // atualizar so o que mudou, sem reescrever milhares de registros por ciclo.
+  contentHash     String?       @map("content_hash")
+  // Ultima vez que a situacao real foi reconsultada no PNCP — usado para
+  // fazer rodizio em vez de varrer a base inteira a cada execucao.
+  situacaoCheckedAt DateTime?   @map("situacao_checked_at")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
@@ -141,6 +152,8 @@ model Tender {
   @@index([situacao])
   @@index([aberturaAt])
   @@index([publicadoAt])
+  @@index([situacaoCheckedAt])
+  @@index([encerramentoAt])
   @@map("tenders")
 }
 
@@ -210,6 +223,10 @@ model TenderItem {
   tenderId        String   @map("tender_id")
   numeroItem      Int?     @map("numero_item")
   descricao       String   @db.Text
+  // Mesma razao das colunas *_norm de Tender: o matcher procura a palavra-chave
+  // tambem na descricao do item, e o pre-filtro no banco precisa achar
+  // "cirurgico" dentro de "cirurgico" sem depender da extensao unaccent.
+  descricaoNorm   String?  @map("descricao_norm") @db.Text
   catmatCode      String?  @map("catmat_code")
   catserCode      String?  @map("catser_code")
   unidadeMedida   String?  @map("unidade_medida")
@@ -365,6 +382,7 @@ enum AnalysisStatus {
   DONE
   FAILED
   NO_DOCUMENTS
+  DISABLED
 }
 
 // ============================================================
@@ -406,6 +424,7 @@ model WorkerLog {
   totalFetched Int?          @map("total_fetched")
   totalNew    Int?           @map("total_new")
   totalDupes  Int?           @map("total_dupes")
+  totalUpdated Int?          @map("total_updated")
   errorMsg    String?        @map("error_msg") @db.Text
   startedAt   DateTime       @map("started_at")
   finishedAt  DateTime?      @map("finished_at")

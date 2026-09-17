@@ -28,16 +28,53 @@ export async function listPNCPDocuments(
 
 // Baixa o conteúdo binário de um documento (normalmente PDF)
 export async function downloadPNCPDocument(uri: string): Promise<Buffer> {
-  const response = await axios.get(uri, { responseType: 'arraybuffer', timeout: 30_000 })
+  const response = await axios.get(uri, { responseType: 'arraybuffer', timeout: 60_000 })
   return Buffer.from(response.data)
 }
 
-// Escolhe o documento mais relevante para análise: prioriza o "Edital"
-// propriamente dito; cai para o primeiro documento ativo se não achar.
-export function pickMainDocument(docs: PNCPDocumentInfo[]): PNCPDocumentInfo | undefined {
-  const ativos = docs.filter((d) => d.statusAtivo)
-  if (ativos.length === 0) return undefined
+export function isPdf(buffer: Buffer): boolean {
+  return buffer.subarray(0, 5).toString('latin1') === '%PDF-'
+}
 
-  const edital = ativos.find((d) => /edital/i.test(d.titulo) || /edital/i.test(d.tipoDocumentoNome))
-  return edital ?? ativos[0]
+// Peças administrativas do processo: existem no PNCP, mas não dizem nada sobre
+// como participar. Autorização de abertura, comprovante de publicação e
+// solicitação de parecer entram aqui.
+const ADMINISTRATIVO =
+  /autoriza[çc][ãa]o|comprovante|publica[çc][ãa]o|parecer|despacho|solicita[çc][ãa]o|^dfd$|\bdfd\b|aviso de licita/i
+
+const EDITAL = /\bedital\b/i
+const TERMO_DE_REFERENCIA = /termo\s*de\s*refer|projeto\s*b[aá]sico|\btr\b/i
+const APOIO = /anexo|habilita|planilha|or[cç]ament|minuta|contrato/i
+
+// Quanto mais alto, mais cedo o documento entra na análise.
+//
+// A classificação olha o TÍTULO primeiro, não o tipoDocumentoNome: na prática
+// o órgão carimba "Edital" no tipo de quase tudo que anexa ao processo, então
+// classificar por tipo empurrava o Termo de Referência — que é onde ficam as
+// exigências técnicas reais — para fora do corte, atrás de comprovante de
+// publicação e solicitação de parecer.
+function prioridade(doc: PNCPDocumentInfo): number {
+  const titulo = doc.titulo ?? ''
+  const tipo = doc.tipoDocumentoNome ?? ''
+
+  if (ADMINISTRATIVO.test(titulo)) return 0
+  if (EDITAL.test(titulo)) return 5
+  if (TERMO_DE_REFERENCIA.test(titulo) || TERMO_DE_REFERENCIA.test(tipo)) return 4
+  if (APOIO.test(titulo)) return 3
+  if (EDITAL.test(tipo)) return 2
+  return 1
+}
+
+// Escolhe o conjunto documental a analisar, do mais relevante para o menos.
+export function selecionarDocumentos(docs: PNCPDocumentInfo[]): PNCPDocumentInfo[] {
+  return docs
+    .filter((d) => d.statusAtivo)
+    .map((doc, ordem) => ({ doc, ordem, peso: prioridade(doc) }))
+    .sort((a, b) => b.peso - a.peso || a.ordem - b.ordem)
+    .map(({ doc }) => doc)
+}
+
+// Compatibilidade com quem só precisa do documento principal.
+export function pickMainDocument(docs: PNCPDocumentInfo[]): PNCPDocumentInfo | undefined {
+  return selecionarDocumentos(docs)[0]
 }

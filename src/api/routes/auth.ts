@@ -9,6 +9,7 @@ import { prisma } from '../../services/tenderService'
 import { hashPassword, signSessionToken, verifyPassword } from '../../services/authService'
 import { asyncHandler, ApiError } from '../asyncHandler'
 import { requireAuth } from '../authMiddleware'
+import { loginLimiter } from '../rateLimit'
 
 export const authRouter = Router()
 
@@ -19,6 +20,7 @@ const loginSchema = z.object({
 
 authRouter.post(
   '/login',
+  loginLimiter,
   asyncHandler(async (req, res) => {
     const { email, password } = loginSchema.parse(req.body)
 
@@ -36,7 +38,7 @@ authRouter.post(
       throw new ApiError(403, 'O acesso desta conta expirou — fale com o administrador')
     }
 
-    const token = signSessionToken(user.id)
+    const token = signSessionToken(user.id, user.tokenVersion)
     res.json({
       token,
       user: { id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin },
@@ -60,11 +62,14 @@ authRouter.post(
       throw new ApiError(401, 'Senha atual incorreta')
     }
 
-    await prisma.user.update({
+    // Trocar a senha invalida as sessões antigas — senão um token roubado
+    // continuaria valendo por até 30 dias mesmo depois da troca.
+    const atualizado = await prisma.user.update({
       where: { id: user.id },
-      data: { passwordHash: await hashPassword(newPassword) },
+      data: { passwordHash: await hashPassword(newPassword), tokenVersion: { increment: 1 } },
     })
-    res.status(204).send()
+
+    res.json({ token: signSessionToken(atualizado.id, atualizado.tokenVersion) })
   })
 )
 
