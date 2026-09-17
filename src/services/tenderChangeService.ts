@@ -5,6 +5,7 @@
 
 import { prisma } from './tenderService'
 import { notificadorQueue } from '../queues'
+import { enfileirarSemTravar } from '../queues/enfileirar'
 import { CAMPOS_RELEVANTES_PARA_AVISO, CampoMonitorado } from '../lib/tenderContentHash'
 
 async function usuariosQueAcompanham(tenderId: string): Promise<string[]> {
@@ -34,12 +35,12 @@ export async function avisarAlteracaoDeTender(
     if (userIds.length === 0) return 0
 
     for (const userId of userIds) {
-      await notificadorQueue.add('notify-tender-change', {
-        tipo: 'alteracao',
-        tenderId,
-        userId,
-        campos: relevantes,
-      })
+      await enfileirarSemTravar(
+        notificadorQueue,
+        'notify-tender-change',
+        { tipo: 'alteracao', tenderId, userId, campos: relevantes },
+        'TenderChange'
+      )
     }
 
     return userIds.length

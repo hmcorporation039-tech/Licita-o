@@ -8,6 +8,7 @@ import { redisConnection, matcherQueue } from '../queues'
 import { pncpClient } from '../lib/httpClient'
 import { parsePNCPTender } from '../services/pncpParser'
 import { saveTender, saveWorkerLog } from '../services/tenderService'
+import { enfileirarSemTravar } from '../queues/enfileirar'
 import { resolveColetaWindow } from '../lib/coletaWindow'
 import { ultimaPublicacaoColetada } from '../services/coletaCursorService'
 import { avisarAlteracaoDeTender } from '../services/tenderChangeService'
@@ -90,7 +91,7 @@ export function startColetorPNCPWorker() {
                   if (result.isNew) {
                     totalNew++
                     // Dispara matcher para cada nova licitação
-                    await matcherQueue.add('match-tender', { tenderId: result.tenderId })
+                    await enfileirarSemTravar(matcherQueue, 'match-tender', { tenderId: result.tenderId }, 'PNCP Worker')
                   } else {
                     totalDupes++
                     if (result.changed) {

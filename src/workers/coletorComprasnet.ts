@@ -11,6 +11,7 @@ import { comprasnetClient } from '../lib/httpClient'
 import { parseComprasnetTender, parseComprasnetDispensa } from '../services/comprasnetParser'
 import { prisma, saveTender, saveWorkerLog } from '../services/tenderService'
 import { findMunicipioByNomeUf } from '../lib/geoService'
+import { enfileirarSemTravar } from '../queues/enfileirar'
 import { resolveColetaWindow } from '../lib/coletaWindow'
 import { ultimaPublicacaoColetada } from '../services/coletaCursorService'
 import { avisarAlteracaoDeTender } from '../services/tenderChangeService'
@@ -83,7 +84,7 @@ async function saveAll(
       const result = await saveTender(tender)
       if (result.isNew) {
         totalNew++
-        await matcherQueue.add('match-tender', { tenderId: result.tenderId })
+        await enfileirarSemTravar(matcherQueue, 'match-tender', { tenderId: result.tenderId }, 'ComprasNet Worker')
       } else {
         totalDupes++
         if (result.changed) {

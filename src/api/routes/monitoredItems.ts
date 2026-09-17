@@ -8,6 +8,7 @@ import { prisma } from '../../services/tenderService'
 import { findMatchingTendersForItem } from '../../services/matcherService'
 import { findMunicipioByNomeUf } from '../../lib/geoService'
 import { notificadorQueue } from '../../queues'
+import { enfileirarSemTravar } from '../../queues/enfileirar'
 import { asyncHandler, ApiError } from '../asyncHandler'
 
 export const monitoredItemsRouter = Router()
@@ -218,11 +219,7 @@ monitoredItemsRouter.post(
     // se o Redis estiver indisponível (ex: cota do plano gratuito estourada),
     // isso não pode derrubar a resposta com os matches que já foram achados.
     for (const match of created) {
-      try {
-        await notificadorQueue.add('notify-match', { tenderMatchId: match.id })
-      } catch (err) {
-        console.error('[Rematch] Erro ao enfileirar notificação (match salvo normalmente):', err)
-      }
+      await enfileirarSemTravar(notificadorQueue, 'notify-match', { tenderMatchId: match.id }, 'Rematch')
     }
 
     res.json({ matchesFound: created.length })

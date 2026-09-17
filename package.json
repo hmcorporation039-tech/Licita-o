@@ -8,6 +8,8 @@
     "build": "tsc",
     "cypress:open": "cypress open",
     "cypress:run": "cypress run",
+    "dados:exportar": "ts-node scripts/exportarDados.ts",
+    "dados:importar": "ts-node scripts/importarDados.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",

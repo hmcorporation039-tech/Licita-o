@@ -9,6 +9,7 @@ import { asyncHandler, ApiError } from '../asyncHandler'
 import { buildChecklistTemplate, ChecklistItem } from '../../lib/checklistTemplate'
 import { analiseHabilitada } from '../../services/editalAnalysisService'
 import { analiseQueue } from '../../queues'
+import { enfileirarSemTravar } from '../../queues/enfileirar'
 import { fetchPNCPItens } from '../../services/pncpItemsService'
 import { normalize } from '../../lib/geoService'
 import { buildAutoMilestones, PlanMilestone } from '../../lib/participationPlanTemplate'
@@ -281,7 +282,15 @@ tendersRouter.post(
       create: { tenderId: req.params.id, status: 'PENDING' },
     })
 
-    await analiseQueue.add('analisar-edital', { tenderId: req.params.id })
+    const enfileirou = await enfileirarSemTravar(
+      analiseQueue,
+      'analisar-edital',
+      { tenderId: req.params.id },
+      'Análise'
+    )
+    if (!enfileirou) {
+      throw new ApiError(503, 'A fila de análise está indisponível no momento — tente de novo em alguns minutos')
+    }
 
     res.status(202).json(pendente)
   })
