@@ -24,6 +24,7 @@
     "matches:rebuild": "ts-node scripts/rebuildMatches.ts",
     "migrar:producao": "ts-node scripts/migrarProducao.ts",
     "postinstall": "prisma generate",
+    "producao:backup": "ts-node scripts/exportarSqlBruto.ts",
     "situacoes:refresh": "ts-node scripts/refreshSituacoes.ts",
     "start": "node dist/entrypoint.js",
     "start:api": "node dist/api/server.js",
