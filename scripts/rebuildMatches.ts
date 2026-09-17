@@ -24,6 +24,8 @@ async function main() {
         catserCodes: item.catserCodes,
         ufs: item.ufs,
         modalidades: item.modalidades,
+        orgaos: item.orgaos,
+        uasgCodes: item.uasgCodes,
         valorMin: item.valorMin ? Number(item.valorMin) : null,
         valorMax: item.valorMax ? Number(item.valorMax) : null,
         raioKm: item.raioKm,

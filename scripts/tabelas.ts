@@ -7,6 +7,23 @@
 // sobrescrevia a pasta de backup. Um import inocente apagava a cópia dos dados.
 // ============================================================
 
+// Os mesmos nomes como estão no Postgres, na mesma ordem de dependência.
+// Usado pelo importador do dump do Supabase, que fala SQL direto.
+export const TABELAS_SQL = [
+  'users',
+  'uasgs',
+  'monitored_items',
+  'tenders',
+  'tender_items',
+  'tender_matches',
+  'tender_checklists',
+  'tender_participation_plans',
+  'company_documents',
+  'tender_analyses',
+  'notifications',
+  'worker_logs',
+] as const
+
 // A ordem importa: quem é referenciado vem antes de quem referencia.
 export const TABELAS = [
   'user',
