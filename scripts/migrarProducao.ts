@@ -28,13 +28,50 @@ function rodar(args: string[]): void {
   execFileSync('npx', ['prisma', ...args], { stdio: 'inherit', shell: true })
 }
 
+// O Supabase expõe duas conexões: a porta 6543 (pooler/pgbouncer, usada pela
+// aplicação) e a 5432 (direta). O Prisma Migrate não funciona pelo pooler —
+// ele precisa de sessão real para tomar advisory lock e rodar DDL. Pelo pooler
+// a migration trava ou falha no meio, deixando o histórico inconsistente.
+function urlDeMigracao(): string {
+  const app = process.env.DATABASE_URL!
+  const direta = process.env.DIRECT_URL
+
+  const ehPooler = /:6543\b/.test(app) || /pooler\./.test(app)
+  if (!ehPooler) return app
+
+  if (direta) {
+    console.log('DATABASE_URL aponta para o pooler do Supabase — usando DIRECT_URL para a migration.')
+    return direta
+  }
+
+  console.error(
+    [
+      '',
+      'DATABASE_URL aponta para o pooler do Supabase (porta 6543).',
+      'O Prisma Migrate precisa da conexão DIRETA (porta 5432), senão a migration trava.',
+      '',
+      'No painel do Supabase: Project Settings → Database → Connection string → escolha',
+      '"Direct connection" (porta 5432) e rode assim:',
+      '',
+      '  DIRECT_URL="postgresql://...:5432/postgres" npm run migrar:producao',
+      '',
+      'A DATABASE_URL da aplicação pode continuar no pooler — isso é só para a migration.',
+      '',
+    ].join('\n')
+  )
+  process.exit(1)
+}
+
 async function main() {
   if (!process.env.DATABASE_URL) {
     console.error('DATABASE_URL não definida. Exporte a do banco que você quer migrar.')
     process.exit(1)
   }
 
-  const alvo = process.env.DATABASE_URL.replace(/\/\/[^@]*@/, '//***:***@')
+  const urlMigracao = urlDeMigracao()
+  process.env.DATABASE_URL = urlMigracao
+
+  const alvo = urlMigracao.replace(/\/\/[^@]*@/, '//***:***@')
   console.log(`Banco: ${alvo}`)
   if (dry) console.log('Modo --dry: mostra o plano e não altera nada.\n')
 

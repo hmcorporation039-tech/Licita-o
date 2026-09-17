@@ -14,6 +14,27 @@ Para só ver o plano, sem alterar nada:
 DATABASE_URL="postgresql://..." npm run migrar:producao -- --dry
 ```
 
+### Se o banco é Supabase
+
+O painel dá duas connection strings, e elas não servem para a mesma coisa:
+
+| Porta | Para quê |
+|---|---|
+| **6543** (pooler/pgbouncer) | A aplicação. Precisa de `?pgbouncer=true` na URL |
+| **5432** (direta) | O Prisma Migrate. **Só ela funciona para migration** |
+
+Pelo pooler a migration trava — o Prisma precisa de sessão real para tomar
+advisory lock e rodar DDL. Pegue a direta em *Project Settings → Database →
+Connection string → Direct connection* e rode:
+
+```bash
+DIRECT_URL="postgresql://...@db.xxxxx.supabase.co:5432/postgres" npm run migrar:producao
+```
+
+O script detecta sozinho se a `DATABASE_URL` é do pooler e para com essa
+instrução antes de tentar qualquer coisa. A `DATABASE_URL` da aplicação
+continua no pooler normalmente — isso é só para a migration.
+
 O resto deste documento explica o que ele faz e por quê — leia se algo der errado.
 
 ---
