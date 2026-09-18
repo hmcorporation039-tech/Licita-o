@@ -34,7 +34,7 @@ export async function analyzeEdital(
   ]
 
   const response = await getClient().models.generateContent({
-    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    model: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
     contents: [{ role: 'user', parts: partes }],
     config: {
       systemInstruction: SYSTEM_PROMPT,
