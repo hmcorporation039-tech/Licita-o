@@ -19,7 +19,9 @@
 // backup antes (`npm run producao:backup`) e escolha uma janela sem uso.
 // ============================================================
 
+import 'dotenv/config'
 import { prisma } from '../src/services/tenderService'
+import { confirmarAlvoRemoto } from './lib/alvoDoBanco'
 
 const LOTE = 5_000
 
@@ -97,6 +99,8 @@ async function enxugarComprasnet(): Promise<number> {
 }
 
 async function main() {
+  await confirmarAlvoRemoto('reescrever o raw_json de todas as licitações da tabela')
+
   const antes = await tamanhoDaTabela()
   const pendentes = await pendentesPNCP()
 

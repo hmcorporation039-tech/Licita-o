@@ -4,6 +4,7 @@
 // sozinho — ver retentionService.ts / workers/index.ts).
 // ============================================================
 
+import 'dotenv/config'
 import {
   cleanupOldUnmatchedTenders,
   cleanupOldWorkerLogs,
@@ -11,8 +12,11 @@ import {
   WORKER_LOG_RETENTION_DAYS,
 } from '../src/services/retentionService'
 import { prisma } from '../src/services/tenderService'
+import { confirmarAlvoRemoto } from './lib/alvoDoBanco'
 
 async function main() {
+  await confirmarAlvoRemoto('apagar licitações encerradas/antigas que ninguém acompanha')
+
   const { deleted, encerradas, antigas } = await cleanupOldUnmatchedTenders()
 
   console.log(`${deleted} licitação(ões) sem interação removida(s):`)

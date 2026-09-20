@@ -134,6 +134,12 @@ Usa o admin criado no passo 5 (configure `CYPRESS_ADMIN_EMAIL`/`CYPRESS_ADMIN_PA
 | `npm run tenders:backfill-norm` | Preenche colunas normalizadas pra busca sem acento |
 | `npm run documentos:check-expirations` | Dispara avisos de documento vencendo |
 
+> `tenders:cleanup` e `rawjson:enxugar` apagam/reescrevem dados. Quando a
+> `DATABASE_URL` não é local, os dois param e pedem que você digite o host do
+> banco antes de seguir — a `DATABASE_URL` de desenvolvimento costuma apontar
+> para produção neste projeto. Use `-- --sim` para pular a pergunta em
+> automação (sem terminal interativo, sem a flag, eles abortam).
+
 ---
 
 ## Estrutura do projeto
