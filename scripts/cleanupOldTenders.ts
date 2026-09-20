@@ -1,15 +1,27 @@
 // ============================================================
 // scripts/cleanupOldTenders.ts — Dispara manualmente a limpeza de
-// licitações antigas sem match (o worker já faz isso periodicamente
+// licitações sem interação (o worker já faz isso periodicamente
 // sozinho — ver retentionService.ts / workers/index.ts).
 // ============================================================
 
-import { cleanupOldUnmatchedTenders, RETENTION_DAYS } from '../src/services/retentionService'
+import {
+  cleanupOldUnmatchedTenders,
+  cleanupOldWorkerLogs,
+  RETENTION_DAYS,
+  WORKER_LOG_RETENTION_DAYS,
+} from '../src/services/retentionService'
 import { prisma } from '../src/services/tenderService'
 
 async function main() {
-  const { deleted } = await cleanupOldUnmatchedTenders()
-  console.log(`${deleted} licitação(ões) sem match, com mais de ${RETENTION_DAYS} dias, removida(s).`)
+  const { deleted, encerradas, antigas } = await cleanupOldUnmatchedTenders()
+
+  console.log(`${deleted} licitação(ões) sem interação removida(s):`)
+  console.log(`  ${encerradas} por já ter passado da data de encerramento`)
+  console.log(`  ${antigas} por ter mais de ${RETENTION_DAYS} dias de coleta`)
+
+  const { deleted: logs } = await cleanupOldWorkerLogs()
+  console.log(`${logs} log(s) de worker com mais de ${WORKER_LOG_RETENTION_DAYS} dias removido(s).`)
+
   await prisma.$disconnect()
 }
 

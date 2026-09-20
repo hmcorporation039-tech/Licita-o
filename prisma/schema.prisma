@@ -235,7 +235,7 @@ model TenderItem {
   valorTotal      Decimal? @map("valor_total")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  tender Tender @relation(fields: [tenderId], references: [id])
+  tender Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
 
   @@index([tenderId])
   @@index([catmatCode])

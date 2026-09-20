@@ -16,6 +16,20 @@ function truncate(str: string, max = 500): string {
   return str.length > max ? str.slice(0, max - 3) + '...' : str
 }
 
+// O payload do PNCP tem alguns KB por licitação e a base guarda centenas de
+// milhares delas, mas só três campos são lidos depois — e sempre os mesmos
+// três: são a chave composta (CNPJ + ano + sequencial) que as APIs de
+// documentos, de itens e de situação exigem na URL. Ver as três chamadas em
+// api/routes/tenders.ts, editalAnalysisService.ts e situacaoUpdateService.ts.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rawJsonEssencial(raw: Record<string, any>): Record<string, unknown> {
+  return {
+    anoCompra: raw.anoCompra,
+    sequencialCompra: raw.sequencialCompra,
+    orgaoEntidade: { cnpj: raw.orgaoEntidade?.cnpj },
+  }
+}
+
 // Normaliza uma contratação retornada pelo PNCP
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function parsePNCPTender(raw: Record<string, any>): NormalizedTender {
@@ -66,7 +80,7 @@ export function parsePNCPTender(raw: Record<string, any>): NormalizedTender {
       : undefined,
     linkEdital: raw.linkSistemaOrigem ?? raw.linkEdital,
     numeroControle: raw.numeroControlePNCP,
-    rawJson: raw,
+    rawJson: rawJsonEssencial(raw),
     items: raw.itens ? parsePNCPItems(raw.itens) : undefined,
   }
 }

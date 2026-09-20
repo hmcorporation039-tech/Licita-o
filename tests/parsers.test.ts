@@ -62,6 +62,32 @@ describe('parsePNCPTender', () => {
     expect(t.objetoResumido!.length).toBe(500)
     expect(t.objetoResumido!.endsWith('...')).toBe(true)
   })
+
+  // Contrato do raw_json enxuto. Esses três campos são a chave composta que
+  // as APIs de documentos, de itens e de situação do PNCP exigem na URL —
+  // se algum sumir daqui, a análise de edital e a atualização de situação
+  // param de funcionar em silêncio.
+  it('guarda no rawJson só a chave composta que o PNCP exige', () => {
+    const t = parsePNCPTender({ ...raw, camposQueNinguemLe: 'x'.repeat(5000) })
+
+    expect(t.rawJson).toEqual({
+      anoCompra: 2026,
+      sequencialCompra: 1,
+      orgaoEntidade: { cnpj: '00000000000191' },
+    })
+  })
+
+  it('não carrega o resto do payload para o banco', () => {
+    const t = parsePNCPTender({ ...raw, itens: [{ descricao: 'notebook' }], lixo: 'x'.repeat(5000) })
+
+    expect(Object.keys(t.rawJson)).toHaveLength(3)
+    expect(JSON.stringify(t.rawJson)).not.toContain('lixo')
+  })
+
+  it('sobrevive a payload sem orgaoEntidade', () => {
+    const { orgaoEntidade, ...semOrgao } = raw
+    expect(parsePNCPTender(semOrgao).rawJson).toMatchObject({ orgaoEntidade: { cnpj: undefined } })
+  })
 })
 
 describe('parseComprasnetTender', () => {
@@ -78,6 +104,13 @@ describe('parseComprasnetTender', () => {
 
   it('guarda a UASG como unidade, em texto', () => {
     expect(parseComprasnetTender(raw).unidade).toBe('153080')
+  })
+
+  // Os três consumidores de rawJson só atendem licitação do PNCP, então
+  // guardar o registro bruto do ComprasNet era peso morto no banco.
+  it('não guarda o payload bruto', () => {
+    expect(parseComprasnetTender(raw).rawJson).toEqual({})
+    expect(parseComprasnetDispensa({ id_compra: 7, co_modalidade_licitacao: '6' }).rawJson).toEqual({})
   })
 })
 

@@ -129,7 +129,8 @@ Usa o admin criado no passo 5 (configure `CYPRESS_ADMIN_EMAIL`/`CYPRESS_ADMIN_PA
 | `npm run start:api` / `npm run start:workers` | Roda a versão compilada (produção) |
 | `npm run matches:rebuild` | Recalcula todos os matches do zero |
 | `npm run situacoes:refresh` | Reconsulta a situação real das licitações no PNCP |
-| `npm run tenders:cleanup` | Remove licitações antigas sem match (retenção) |
+| `npm run tenders:cleanup` | Remove licitações encerradas/antigas que ninguém acompanha (retenção) |
+| `npm run rawjson:enxugar` | Backfill: reescreve o `raw_json` das licitações já coletadas, guardando só o que é lido |
 | `npm run tenders:backfill-norm` | Preenche colunas normalizadas pra busca sem acento |
 | `npm run documentos:check-expirations` | Dispara avisos de documento vencendo |
 

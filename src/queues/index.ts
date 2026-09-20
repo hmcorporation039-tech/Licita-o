@@ -54,19 +54,25 @@ interface ColetorScheduler {
 // ficaria congelada no dia em que o processo subiu e a coleta pararia de
 // avançar silenciosamente. Quem resolve a janela é o worker, no momento da
 // execução (ver lib/coletaWindow.ts).
+//
+// Cadência de 12h (era 2h): a coleta de 2 em 2 horas gastava 12× mais
+// comandos no Redis sem trazer licitação nova na mesma proporção, e a cota
+// do plano gratuito do Upstash já estourou uma vez neste projeto (ver o
+// try/catch de startup em workers/index.ts). As fontes ficam escalonadas em
+// uma hora para não competirem entre si pelo rate limit das APIs de origem.
 export const COLETOR_SCHEDULERS: ColetorScheduler[] = [
   {
     queue: coletorPNCPQueue,
     schedulerId: 'coleta-pncp',
     jobName: 'coleta-pncp',
-    pattern: '0 */2 * * *',
+    pattern: '0 6,18 * * *',
     fonte: 'PNCP',
   },
   {
     queue: coletorComprasnetQueue,
     schedulerId: 'coleta-comprasnet',
     jobName: 'coleta-comprasnet',
-    pattern: '0 1-23/2 * * *',
+    pattern: '0 7,19 * * *',
     fonte: 'COMPRASNET',
   },
 ]
