@@ -185,3 +185,15 @@ licitacao-platform/
 |---|---|
 | [`PROGRESSO.md`](PROGRESSO.md) | Fases, status de cada item e o que ainda não foi iniciado |
 | [`MIGRACAO.md`](MIGRACAO.md) | Runbook da migração v1.0 → v2.0, para executar contra produção |
+
+---
+
+## Produção
+
+| Peça | Onde |
+|---|---|
+| API + workers | Railway — `api-production-1fb4.up.railway.app` |
+| Frontend | Vercel — `licita-o-lac.vercel.app` |
+| Banco | Railway Postgres |
+| Filas | Upstash Redis |
+
