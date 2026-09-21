@@ -93,6 +93,28 @@ produção, e a análise de edital pelo caminho da Claude.
 
 ---
 
+## v2.1 — Custo de banco e de Redis
+
+Fase motivada pela entrada em operação na nuvem: a base cresce sem limite prático
+e o plano do Upstash já havia estourado uma vez. **Nenhuma correção exigiu crédito
+de API** — tudo verificado offline por `npm run verify` (77 testes).
+
+| # | O que | Correção | Status |
+|---|---|---|---|
+| C-01 | `Tender.rawJson` guardava o payload inteiro da origem (alguns KB por licitação), mas só três campos são lidos — e só para o PNCP | Parsers passam a gravar só `{ anoCompra, sequencialCompra, orgaoEntidade.cnpj }`; ComprasNet grava `{}`, já que nenhum consumidor lê o bruto dessa fonte. Contrato travado por teste | ✅ |
+| C-02 | **Faxina quebrada**: `TenderItem` era a única relação de `Tender` com `ON DELETE RESTRICT`. Como abrir o detalhe grava os itens, toda licitação já aberta virava indeletável e a retenção morria com erro de chave estrangeira | Migration `00000000000003_tender_item_cascade` alinha com as outras quatro relações, que já tinham `CASCADE` | ✅ |
+| C-03 | Retenção só apagava 90 dias após a coleta, deixando licitação encerrada ocupando espaço até lá | Nova regra por `encerramentoAt`, preservando o que qualquer cliente acompanha (match, checklist, plano **ou** análise). A regra de 90 dias fica como rede para licitação sem data de encerramento na origem | ✅ |
+| C-04 | A guarda da retenção esquecia `participationPlans` — o plano tem cascade, então seria apagado junto sem impedir a exclusão | Incluído na condição | ✅ |
+| C-05 | Coleta de 2 em 2 horas gastava 12× mais comandos no Redis sem trazer licitação nova na mesma proporção | Cadência de 12h (PNCP 6h/18h, ComprasNet 7h/19h), mantendo o escalonamento entre as fontes | ✅ |
+| C-06 | `WorkerLog` nunca teve poda e cresce para sempre | Poda de 90 dias junto da rotina de retenção | ✅ |
+
+**Pendente de ambiente real:** aplicar a migration em produção, rodar
+`npm run rawjson:enxugar` (backfill) e o `VACUUM FULL tenders` que efetivamente
+devolve o espaço ao disco — o `UPDATE` sozinho só marca as linhas como mortas.
+Ver o cabeçalho de `scripts/enxugarRawJson.ts`.
+
+---
+
 ## Próximas fases (não iniciadas)
 
 | Fase | Escopo | Status |

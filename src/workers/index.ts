@@ -11,7 +11,7 @@ import { startMatcherWorker } from './matcher'
 import { startNotificadorWorker } from './notificador'
 import { startAnaliseWorker } from './analise'
 import { refreshAllOpenSituacoes } from '../services/situacaoUpdateService'
-import { cleanupOldUnmatchedTenders } from '../services/retentionService'
+import { cleanupOldUnmatchedTenders, cleanupOldWorkerLogs } from '../services/retentionService'
 import { checkExpiringDocuments } from '../services/documentAlertService'
 
 async function main() {
@@ -60,10 +60,14 @@ async function main() {
   // Limpa licitações antigas sem match, pra não deixar o banco crescer
   // indefinidamente com dado que ninguém nunca viu (ver retentionService.ts).
   async function runCleanup() {
-    console.log('[Retenção] Iniciando limpeza de licitações antigas sem match...')
+    console.log('[Retenção] Iniciando limpeza de licitações sem interação...')
     try {
-      const { deleted } = await cleanupOldUnmatchedTenders()
-      console.log(`[Retenção] Concluído — ${deleted} licitação(ões) removida(s).`)
+      const { deleted, encerradas, antigas } = await cleanupOldUnmatchedTenders()
+      console.log(
+        `[Retenção] Concluído — ${deleted} licitação(ões) removida(s) (${encerradas} encerrada(s), ${antigas} antiga(s)).`
+      )
+      const { deleted: logs } = await cleanupOldWorkerLogs()
+      console.log(`[Retenção] ${logs} log(s) de worker removido(s).`)
     } catch (err) {
       console.error('[Retenção] Erro na limpeza:', err)
     }

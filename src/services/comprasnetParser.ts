@@ -2,6 +2,11 @@
 // services/comprasnetParser.ts — Normaliza resposta do ComprasNet
 // Fonte: /modulo-legado/1_consultarLicitacao (Lei 8.666/10.520)
 // Docs: https://dadosabertos.compras.gov.br/swagger-ui/index.html
+//
+// rawJson vai vazio de propósito: os três lugares que leem esse campo
+// (api/routes/tenders.ts, editalAnalysisService.ts, situacaoUpdateService.ts)
+// atendem só licitação do PNCP e saem antes de tocar no payload quando a
+// fonte é ComprasNet. Guardar o registro bruto aqui era peso morto no banco.
 // ============================================================
 
 import {
@@ -46,7 +51,7 @@ export function parseComprasnetTender(raw: Record<string, any>): NormalizedTende
     encerramentoAt: raw.data_entrega_proposta ? new Date(raw.data_entrega_proposta) : undefined,
     publicadoAt: raw.data_publicacao ? new Date(raw.data_publicacao) : undefined,
     numeroControle: raw.numero_processo,
-    rawJson: raw,
+    rawJson: {},
     // Itens exigem uma chamada separada a /modulo-legado/2_consultarItemLicitacao
     // por licitação — fica para uma próxima fase (matching por CATMAT depende disso).
     items: undefined,
@@ -78,7 +83,7 @@ export function parseComprasnetDispensa(raw: Record<string, any>): NormalizedTen
     unidade: raw.co_uasg !== undefined && raw.co_uasg !== null ? String(raw.co_uasg) : undefined,
     publicadoAt: publicadoAt ? new Date(publicadoAt) : undefined,
     numeroControle: raw.nu_processo,
-    rawJson: raw,
+    rawJson: {},
     items: undefined,
   }
 }
