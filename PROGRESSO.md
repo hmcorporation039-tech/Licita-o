@@ -132,5 +132,10 @@ Ver o cabeçalho de `scripts/enxugarRawJson.ts`.
 
 | O que | Por que importa |
 |---|---|
-| **Prompt de `documentosExigidos` traz boilerplate.** Na verificação real, 7 dos 9 itens eram declarações padrão do Anexo 02 (não emprego de menor, idoneidade, inexistência de parentes). O prompt em `llm/types.ts` pede o que é específico "além do básico padrão" e isso não foi respeitado | É a entrada do parecer de habilitação da F2. Lista com boilerplate gera ruído no cruzamento com o cofre em vez de resposta útil — vale corrigir **antes** de construir o parecer em cima |
 | **`pdfTextService` não tem teste de PDF escaneado real.** A decisão do híbrido é testada por unidade, mas não houve um edital escaneado na amostra | O caminho do PDF nativo nunca foi exercitado ponta a ponta |
+
+### Corrigidos
+
+| O que | Correção |
+|---|---|
+| **Prompt de `documentosExigidos` trazia boilerplate.** Na verificação real, 7 dos 9 itens eram declarações padrão do Anexo 02 (não emprego de menor, idoneidade, inexistência de parentes). O prompt pedia "além do básico padrão", mas só citava certidões — nunca as declarações-modelo, que são a maioria do ruído | `SYSTEM_PROMPT` em `llm/types.ts` passou a listar explicitamente as declarações-padrão (não emprego de menor, idoneidade, elaboração independente, nepotismo, ME/EPP) como o que NÃO entra em `documentosExigidos`, alinhado com `checklistTemplate.ts`. Pré-requisito da F2 (parecer de habilitação) — ainda pendente de verificação real com `analise:smoke` contra um edital que tenha essas declarações |
